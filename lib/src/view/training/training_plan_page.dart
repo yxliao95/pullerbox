@@ -32,8 +32,10 @@ class _TrainingPlanPageState extends ConsumerState<TrainingPlanPage> {
     final state = ref.watch(trainingPlanProvider);
     final controller = ref.read(trainingPlanProvider.notifier);
     final totalDurationText = _formatDuration(state.totalDurationSeconds);
-    final topInset = MediaQuery.of(context).padding.top;
-    const expandedHeaderHeight = 220.0;
+    const sliverAppBarExpandedHeight = 210.0;
+    const sliverAppBarCollapsedThresholdPadding = 8.0;
+    const sliverAppBarTitlePadding = EdgeInsets.fromLTRB(16, 0, 16, 12);
+    const sliverHeaderExpandedPadding = EdgeInsets.fromLTRB(16, 12, 16, 18);
 
     if (_nameController.text != state.name) {
       _nameController.text = state.name;
@@ -51,13 +53,33 @@ class _TrainingPlanPageState extends ConsumerState<TrainingPlanPage> {
         ),
         child: CustomScrollView(
           slivers: <Widget>[
-            SliverToBoxAdapter(
-              child: _ExpandedHeaderSection(
-                title: '总时长',
-                duration: totalDurationText,
-                onConnectPressed: () {},
-                topInset: topInset,
-                height: expandedHeaderHeight,
+            SliverAppBar(
+              pinned: true,
+              floating: true,
+              snap: false,
+              expandedHeight: sliverAppBarExpandedHeight,
+              backgroundColor: const Color(0xFF2A73F1),
+              elevation: 0,
+              flexibleSpace: LayoutBuilder(
+                builder: (context, constraints) {
+                  final topPadding = MediaQuery.of(context).padding.top;
+                  final collapsedThreshold = topPadding + kToolbarHeight + sliverAppBarCollapsedThresholdPadding;
+                  final isCollapsed = constraints.maxHeight <= collapsedThreshold;
+
+                  return FlexibleSpaceBar(
+                    centerTitle: false,
+                    titlePadding: sliverAppBarTitlePadding,
+                    title: isCollapsed
+                        ? _CollapsedHeaderContent(title: '总时长', duration: totalDurationText, onConnectPressed: () {})
+                        : null,
+                    background: _ExpandedHeaderSection(
+                      title: '总时长',
+                      duration: totalDurationText,
+                      onConnectPressed: () {},
+                      expandedPadding: sliverHeaderExpandedPadding,
+                    ),
+                  );
+                },
               ),
             ),
             SliverToBoxAdapter(
@@ -149,22 +171,19 @@ class _ExpandedHeaderSection extends StatelessWidget {
     required this.title,
     required this.duration,
     required this.onConnectPressed,
-    required this.topInset,
-    required this.height,
+    required this.expandedPadding,
   });
 
   final String title;
   final String duration;
   final VoidCallback onConnectPressed;
-  final double topInset;
-  final double height;
+  final EdgeInsets expandedPadding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: BoxConstraints(minHeight: height + topInset),
-      padding: EdgeInsets.fromLTRB(16, 20 + topInset, 16, 18),
+      padding: expandedPadding,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[Color(0xFF2A73F1), Color(0xFF1F5DD8)],
@@ -172,20 +191,57 @@ class _ExpandedHeaderSection extends StatelessWidget {
           end: Alignment.bottomCenter,
         ),
       ),
-      child: Column(
-        children: <Widget>[
-          Text(
-            title,
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          Text(
-            duration,
-            style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          _BluetoothCard(onConnectPressed: onConnectPressed),
-        ],
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            Text(
+              title,
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              duration,
+              style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            _BluetoothCard(onConnectPressed: onConnectPressed),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _CollapsedHeaderContent extends StatelessWidget {
+  const _CollapsedHeaderContent({required this.title, required this.duration, required this.onConnectPressed});
+
+  final String title;
+  final String duration;
+  final VoidCallback onConnectPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: <Widget>[
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                duration,
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        _BluetoothIconButton(onConnectPressed: onConnectPressed),
+      ],
     );
   }
 }
@@ -238,6 +294,26 @@ class _BluetoothButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       ),
       child: const Text('连接设备'),
+    );
+  }
+}
+
+class _BluetoothIconButton extends StatelessWidget {
+  const _BluetoothIconButton({required this.onConnectPressed});
+
+  final VoidCallback onConnectPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onConnectPressed,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+        child: const Icon(Icons.bluetooth, color: Color(0xFF2A73F1), size: 20),
+      ),
     );
   }
 }
