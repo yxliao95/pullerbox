@@ -232,7 +232,7 @@ class _CollapsedHeaderContent extends StatelessWidget {
                 title,
                 style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 16),
               Text(
                 duration,
                 style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
