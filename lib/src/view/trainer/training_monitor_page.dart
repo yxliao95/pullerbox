@@ -8,7 +8,10 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/training_plan.dart';
+import '../../models/training_record.dart';
 import '../../provider/training_plan_provider.dart';
+import '../../provider/training_record_provider.dart';
 
 class TrainingMonitorPage extends ConsumerStatefulWidget {
   const TrainingMonitorPage({super.key});
@@ -34,6 +37,9 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   bool _isSoundOn = true;
   bool _isPreparing = true;
   bool _isWorking = true;
+  bool _isFinishPending = false;
+  bool _isSummaryVisible = false;
+  bool _recordSaved = false;
   int _currentCycle = 1;
   double _elapsedInPhase = 0.0;
   double _currentValue = 0.0;
@@ -43,8 +49,13 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   double _workPeak = 0.0;
   List<_ChartSample> _samples = <_ChartSample>[];
   List<double> _workSecondLimits = <double>[];
+  List<double> _workValues = <double>[];
+  List<TrainingSample> _workSamples = <TrainingSample>[];
+  _TrainingSummary? _summary;
   double _toolbarHorizontalWidth = 0.0;
   double _exitButtonHeight = 0.0;
+  double _workElapsedSeconds = 0.0;
+  DateTime _trainingStartedAt = DateTime.now();
 
   @override
   void initState() {
@@ -84,21 +95,28 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     if (deltaSeconds <= 0) {
       return;
     }
-    final targetTime = (_elapsedInPhase - _renderLagSeconds).clamp(0.0, _elapsedInPhase);
+    final lagSeconds = _isFinishPending ? 0.0 : _renderLagSeconds;
+    final targetTime = (_elapsedInPhase - lagSeconds).clamp(0.0, _elapsedInPhase);
     final nextDisplayTime = math.min(_displayTime.value + deltaSeconds, targetTime);
     if (nextDisplayTime != _displayTime.value) {
       _displayTime.value = nextDisplayTime;
     }
+    if (_isFinishPending && _displayTime.value >= _elapsedInPhase) {
+      setState(() {
+        _isFinishPending = false;
+        _isSummaryVisible = true;
+      });
+    }
   }
 
   void _tick() {
-    if (_isPaused) {
+    if (_isPaused || _isFinishPending || _isSummaryVisible) {
       return;
     }
     final plan = ref.read(trainingPlanProvider);
     final phaseDuration = _isPreparing ? _prepareSeconds : (_isWorking ? plan.workSeconds : plan.restSeconds);
     if (phaseDuration <= 0) {
-      _advancePhase(plan.workSeconds, plan.restSeconds, plan.cycles);
+      _advancePhase(plan);
       return;
     }
 
@@ -106,6 +124,11 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final rawValue = _nextSampleValue();
     _smoothedValue = _emaAlpha * rawValue + (1 - _emaAlpha) * _smoothedValue;
     _currentValue = _smoothedValue;
+    if (_isWorking && !_isPreparing) {
+      _workValues.add(_currentValue);
+      _workElapsedSeconds += _sampleIntervalSeconds;
+      _workSamples.add(TrainingSample(time: _workElapsedSeconds, value: _currentValue));
+    }
     _samples = <_ChartSample>[..._samples, _ChartSample(time: _elapsedInPhase, value: _currentValue)];
     if (_samples.length > 600) {
       _samples = _samples.sublist(_samples.length - 600);
@@ -116,34 +139,44 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     }
 
     if (_elapsedInPhase >= phaseDuration) {
-      _advancePhase(plan.workSeconds, plan.restSeconds, plan.cycles);
+      _advancePhase(plan);
     }
     setState(() {});
   }
 
-  void _advancePhase(int workSeconds, int restSeconds, int totalCycles) {
+  void _advancePhase(TrainingPlanState plan) {
+    final totalCycles = math.max(1, plan.cycles);
     if (_isPreparing) {
       _startPhase(isWorking: true);
       return;
     }
     if (_isWorking) {
-      if (restSeconds > 0) {
+      if (_currentCycle >= totalCycles) {
+        _completeTraining(plan);
+        return;
+      }
+      if (plan.restSeconds > 0) {
         _startPhase(isWorking: false);
       } else {
-        _finishCycle(totalCycles);
+        _finishCycle(plan);
       }
     } else {
-      _finishCycle(totalCycles);
+      _finishCycle(plan);
     }
   }
 
-  void _finishCycle(int totalCycles) {
-    if (_currentCycle >= totalCycles) {
-      _isPaused = true;
-      return;
-    }
+  void _finishCycle(TrainingPlanState plan) {
     _currentCycle += 1;
     _startPhase(isWorking: true);
+  }
+
+  void _completeTraining(TrainingPlanState plan) {
+    _summary = _buildSummary(plan);
+    if (_summary != null) {
+      _saveTrainingRecord(plan, _summary!);
+    }
+    _isFinishPending = true;
+    _timer?.cancel();
   }
 
   void _startPhase({required bool isWorking}) {
@@ -176,6 +209,14 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _lastFrameTimestamp = Duration.zero;
     _currentValue = 0.0;
     _smoothedValue = 0.0;
+    _workValues = <double>[];
+    _workSamples = <TrainingSample>[];
+    _summary = null;
+    _isFinishPending = false;
+    _isSummaryVisible = false;
+    _recordSaved = false;
+    _workElapsedSeconds = 0.0;
+    _trainingStartedAt = DateTime.now();
   }
 
   double _nextSampleValue() {
@@ -258,7 +299,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
 
   void _goToNextAction() {
     final plan = ref.read(trainingPlanProvider);
-    _advancePhase(plan.workSeconds, plan.restSeconds, plan.cycles);
+    _advancePhase(plan);
     setState(() {});
   }
 
@@ -334,104 +375,159 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                 ),
               ],
             ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    const exitButtonWidth = 36.0;
-                    const minTitleGap = 8.0;
-                    final titleText = '循环 $_currentCycle / $totalCycles';
-                    final textScaler = MediaQuery.textScalerOf(context);
-                    final titlePainter = TextPainter(
-                      text: TextSpan(
-                        text: titleText,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                      textDirection: TextDirection.ltr,
-                      textScaler: textScaler,
-                    )..layout();
-                    final resolvedToolbarWidth = _toolbarHorizontalWidth > 0
-                        ? _toolbarHorizontalWidth
-                        : _estimatedToolbarWidth;
-                    final maxReserved = math.max(exitButtonWidth, resolvedToolbarWidth);
-                    final availableCenterWidth = (constraints.maxWidth - 2 * maxReserved - minTitleGap * 2).clamp(
-                      0.0,
-                      constraints.maxWidth,
-                    );
-                    final isToolbarVertical = titlePainter.width > availableCenterWidth;
-                    final resolvedExitHeight = _exitButtonHeight > 0 ? _exitButtonHeight : exitButtonWidth;
-                    return Stack(
-                      children: <Widget>[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _MeasureSize(
-                            onChange: (size) {
-                              if (size.height != _exitButtonHeight) {
-                                setState(() {
-                                  _exitButtonHeight = size.height;
-                                });
-                              }
-                            },
-                            child: _ExitButton(onPressed: () => Navigator.of(context).maybePop()),
-                          ),
+            if (_isSummaryVisible && _summary != null)
+              Positioned.fill(
+                child: _SummaryOverlay(
+                  summary: _summary!,
+                  onExit: () => Navigator.of(context).maybePop(),
+                ),
+              )
+            else
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const exitButtonWidth = 36.0;
+                      const minTitleGap = 8.0;
+                      final titleText = '循环 $_currentCycle / $totalCycles';
+                      final textScaler = MediaQuery.textScalerOf(context);
+                      final titlePainter = TextPainter(
+                        text: TextSpan(
+                          text: titleText,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
-                        Center(
-                          child: SizedBox(
-                            height: resolvedExitHeight,
-                            child: Align(
-                              alignment: Alignment.center,
-                              child: Text(
-                                titleText,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        textDirection: TextDirection.ltr,
+                        textScaler: textScaler,
+                      )..layout();
+                      final resolvedToolbarWidth = _toolbarHorizontalWidth > 0
+                          ? _toolbarHorizontalWidth
+                          : _estimatedToolbarWidth;
+                      final maxReserved = math.max(exitButtonWidth, resolvedToolbarWidth);
+                      final availableCenterWidth = (constraints.maxWidth - 2 * maxReserved - minTitleGap * 2).clamp(
+                        0.0,
+                        constraints.maxWidth,
+                      );
+                      final isToolbarVertical = titlePainter.width > availableCenterWidth;
+                      final resolvedExitHeight = _exitButtonHeight > 0 ? _exitButtonHeight : exitButtonWidth;
+                      return Stack(
+                        children: <Widget>[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: _MeasureSize(
+                              onChange: (size) {
+                                if (size.height != _exitButtonHeight) {
+                                  setState(() {
+                                    _exitButtonHeight = size.height;
+                                  });
+                                }
+                              },
+                              child: _ExitButton(onPressed: () => Navigator.of(context).maybePop()),
+                            ),
+                          ),
+                          Center(
+                            child: SizedBox(
+                              height: resolvedExitHeight,
+                              child: Align(
+                                alignment: Alignment.center,
+                                child: Text(
+                                  titleText,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: isToolbarVertical
-                              ? _Toolbar(
-                                  isSoundOn: _isSoundOn,
-                                  isPaused: _isPaused,
-                                  isVertical: true,
-                                  onToggleSound: _toggleSound,
-                                  onPrevious: _goToPreviousAction,
-                                  onTogglePause: _togglePause,
-                                  onNext: _goToNextAction,
-                                )
-                              : _MeasureSize(
-                                  onChange: (size) {
-                                    if (size.width != _toolbarHorizontalWidth) {
-                                      setState(() {
-                                        _toolbarHorizontalWidth = size.width;
-                                      });
-                                    }
-                                  },
-                                  child: _Toolbar(
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: isToolbarVertical
+                                ? _Toolbar(
                                     isSoundOn: _isSoundOn,
                                     isPaused: _isPaused,
-                                    isVertical: false,
+                                    isVertical: true,
                                     onToggleSound: _toggleSound,
                                     onPrevious: _goToPreviousAction,
                                     onTogglePause: _togglePause,
                                     onNext: _goToNextAction,
+                                  )
+                                : _MeasureSize(
+                                    onChange: (size) {
+                                      if (size.width != _toolbarHorizontalWidth) {
+                                        setState(() {
+                                          _toolbarHorizontalWidth = size.width;
+                                        });
+                                      }
+                                    },
+                                    child: _Toolbar(
+                                      isSoundOn: _isSoundOn,
+                                      isPaused: _isPaused,
+                                      isVertical: false,
+                                      onToggleSound: _toggleSound,
+                                      onPrevious: _goToPreviousAction,
+                                      onTogglePause: _togglePause,
+                                      onNext: _goToNextAction,
+                                    ),
                                   ),
-                                ),
-                        ),
-                      ],
-                    );
-                  },
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
     );
+  }
+
+  _TrainingSummary _buildSummary(TrainingPlanState plan) {
+    final values = List<double>.from(_workValues);
+    values.sort();
+    final maxValue = values.isEmpty ? 0.0 : values.last;
+    final averageValue = values.isEmpty ? 0.0 : values.reduce((a, b) => a + b) / values.length;
+    final medianValue = values.isEmpty
+        ? 0.0
+        : (values.length.isOdd
+            ? values[values.length ~/ 2]
+            : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
+    final restCycles = plan.cycles > 0 ? plan.cycles - 1 : 0;
+    final totalSeconds = plan.workSeconds * plan.cycles + plan.restSeconds * restCycles;
+    return _TrainingSummary(
+      planName: plan.name,
+      workSeconds: plan.workSeconds,
+      restSeconds: plan.restSeconds,
+      cycles: plan.cycles,
+      totalSeconds: totalSeconds,
+      maxValue: maxValue,
+      averageValue: averageValue,
+      medianValue: medianValue,
+    );
+  }
+
+  void _saveTrainingRecord(TrainingPlanState plan, _TrainingSummary summary) {
+    if (_recordSaved) {
+      return;
+    }
+    final record = TrainingRecord(
+      id: _trainingStartedAt.microsecondsSinceEpoch.toString(),
+      planName: plan.name,
+      workSeconds: plan.workSeconds,
+      restSeconds: plan.restSeconds,
+      cycles: plan.cycles,
+      totalSeconds: summary.totalSeconds,
+      startedAt: _trainingStartedAt,
+      samples: List<TrainingSample>.from(_workSamples),
+      statistics: TrainingStatistics(
+        maxValue: summary.maxValue,
+        averageValue: summary.averageValue,
+        medianValue: summary.medianValue,
+      ),
+    );
+    ref.read(trainingRecordProvider.notifier).addRecord(record);
+    _recordSaved = true;
   }
 }
 
@@ -593,6 +689,156 @@ class _ProgressBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryOverlay extends StatefulWidget {
+  const _SummaryOverlay({required this.summary, required this.onExit});
+
+  final _TrainingSummary summary;
+  final VoidCallback onExit;
+
+  @override
+  State<_SummaryOverlay> createState() => _SummaryOverlayState();
+}
+
+class _SummaryOverlayState extends State<_SummaryOverlay> {
+  double _exitButtonHeight = 0.0;
+
+  @override
+  Widget build(BuildContext context) {
+    const defaultExitHeight = 36.0;
+    const topPadding = 6.0;
+    final resolvedExitHeight = _exitButtonHeight > 0 ? _exitButtonHeight : defaultExitHeight;
+    return Container(
+      color: const Color(0xFFF2F2F2),
+      child: Stack(
+        children: <Widget>[
+          Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, topPadding, 8, 0),
+              child: _MeasureSize(
+                onChange: (size) {
+                  if (size.height != _exitButtonHeight) {
+                    setState(() {
+                      _exitButtonHeight = size.height;
+                    });
+                  }
+                },
+                child: IconButton(
+                  onPressed: widget.onExit,
+                  icon: const Icon(Icons.close, color: Colors.black87),
+                  splashRadius: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: topPadding,
+            left: 0,
+            right: 0,
+            child: SizedBox(
+              height: resolvedExitHeight,
+              child: const Align(
+                alignment: Alignment.center,
+                child: Text(
+                  '已完成',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  widget.summary.planName,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _SummaryMetric(
+                      label: '锻炼 / 休息 / 循环',
+                      value: '${widget.summary.workSeconds} / ${widget.summary.restSeconds} / ${widget.summary.cycles}',
+                    ),
+                    const SizedBox(width: 48),
+                    _SummaryMetric(
+                      label: '总时间',
+                      value: _formatDuration(widget.summary.totalSeconds),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _SummaryMetric(label: '最大值', value: '${widget.summary.maxValue.toStringAsFixed(1)}kg'),
+                    const SizedBox(width: 36),
+                    _SummaryMetric(label: '平均值', value: '${widget.summary.averageValue.toStringAsFixed(1)}kg'),
+                    const SizedBox(width: 36),
+                    _SummaryMetric(label: '中位数', value: '${widget.summary.medianValue.toStringAsFixed(1)}kg'),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: 200,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: widget.onExit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2D76F8),
+                      shape: const StadiumBorder(),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      '退出',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remaining = seconds % 60;
+    return '${minutes.toString()}:${remaining.toString().padLeft(2, '0')}';
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF8E8E8E)),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
+        ),
+      ],
     );
   }
 }
@@ -847,4 +1093,26 @@ class _ChartSample {
 
   final double time;
   final double value;
+}
+
+class _TrainingSummary {
+  const _TrainingSummary({
+    required this.planName,
+    required this.workSeconds,
+    required this.restSeconds,
+    required this.cycles,
+    required this.totalSeconds,
+    required this.maxValue,
+    required this.averageValue,
+    required this.medianValue,
+  });
+
+  final String planName;
+  final int workSeconds;
+  final int restSeconds;
+  final int cycles;
+  final int totalSeconds;
+  final double maxValue;
+  final double averageValue;
+  final double medianValue;
 }
