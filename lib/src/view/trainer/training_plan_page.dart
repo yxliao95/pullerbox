@@ -62,7 +62,11 @@ class _TimerPageState extends ConsumerState<TimerPage> {
         width: MediaQuery.of(context).size.width - 32,
         child: FloatingActionButton.extended(
           onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TrainingMonitorPage()));
+            Navigator.of(context).push(
+              MaterialPageRoute<Widget>(
+                builder: (_) => const TrainingMonitorPage(),
+              ),
+            );
           },
           backgroundColor: const Color(0xFF2A73F1),
           foregroundColor: Colors.white,
