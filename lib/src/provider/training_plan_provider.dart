@@ -57,24 +57,28 @@ class TrainingPlanLibraryState {
     required this.selectedPlanId,
     required this.isEditing,
     required this.selectedPlanIds,
+    required this.isFreeTraining,
   });
 
   final List<TrainingPlanItem> plans;
   final String? selectedPlanId;
   final bool isEditing;
   final Set<String> selectedPlanIds;
+  final bool isFreeTraining;
 
   TrainingPlanLibraryState copyWith({
     List<TrainingPlanItem>? plans,
     String? selectedPlanId,
     bool? isEditing,
     Set<String>? selectedPlanIds,
+    bool? isFreeTraining,
   }) {
     return TrainingPlanLibraryState(
       plans: plans ?? this.plans,
       selectedPlanId: selectedPlanId ?? this.selectedPlanId,
       isEditing: isEditing ?? this.isEditing,
       selectedPlanIds: selectedPlanIds ?? this.selectedPlanIds,
+      isFreeTraining: isFreeTraining ?? this.isFreeTraining,
     );
   }
 }
@@ -109,6 +113,7 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
       selectedPlanId: 'default',
       isEditing: false,
       selectedPlanIds: <String>{},
+      isFreeTraining: false,
     );
   }
 
@@ -127,12 +132,17 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
       selectedPlanId: selectedPlanId,
       isEditing: false,
       selectedPlanIds: <String>{},
+      isFreeTraining: snapshot.isFreeTraining,
     );
     ref.read(trainingPlanProvider.notifier).applyPlan(activePlan.plan);
   }
 
   Future<void> _persistLibrary() async {
-    final snapshot = TrainingPlanLibrarySnapshot(plans: state.plans, selectedPlanId: state.selectedPlanId);
+    final snapshot = TrainingPlanLibrarySnapshot(
+      plans: state.plans,
+      selectedPlanId: state.selectedPlanId,
+      isFreeTraining: state.isFreeTraining,
+    );
     await ref.read(trainingPlanStorageProvider).saveLibrary(snapshot);
   }
 
@@ -233,6 +243,14 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
         .map((item) => item.id == selectedPlanId ? TrainingPlanItem(id: item.id, plan: plan) : item)
         .toList();
     state = state.copyWith(plans: updated);
+    unawaited(_persistLibrary());
+  }
+
+  void setFreeTraining(bool isFreeTraining) {
+    if (state.isFreeTraining == isFreeTraining) {
+      return;
+    }
+    state = state.copyWith(isFreeTraining: isFreeTraining);
     unawaited(_persistLibrary());
   }
 }

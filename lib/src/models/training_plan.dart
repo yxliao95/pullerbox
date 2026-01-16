@@ -71,14 +71,20 @@ class TrainingPlanItem {
 }
 
 class TrainingPlanLibrarySnapshot {
-  const TrainingPlanLibrarySnapshot({required this.plans, required this.selectedPlanId});
+  const TrainingPlanLibrarySnapshot({
+    required this.plans,
+    required this.selectedPlanId,
+    required this.isFreeTraining,
+  });
 
   final List<TrainingPlanItem> plans;
   final String? selectedPlanId;
+  final bool isFreeTraining;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'selectedPlanId': selectedPlanId,
+      'isFreeTraining': isFreeTraining,
       'plans': plans.map((item) => item.toJson()).toList(),
     };
   }
@@ -92,6 +98,7 @@ class TrainingPlanLibrarySnapshot {
     return TrainingPlanLibrarySnapshot(
       plans: plans,
       selectedPlanId: json['selectedPlanId'] as String?,
+      isFreeTraining: json['isFreeTraining'] as bool? ?? false,
     );
   }
 }

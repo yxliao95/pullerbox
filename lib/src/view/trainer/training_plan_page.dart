@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/training_plan.dart';
 import '../../provider/training_plan_provider.dart';
+import 'training_monitor_page.dart';
 
 class TimerPage extends ConsumerStatefulWidget {
   const TimerPage({super.key});
@@ -35,10 +36,12 @@ class _TimerPageState extends ConsumerState<TimerPage> {
     ref.listen<TrainingPlanState>(trainingPlanProvider, (previous, next) {
       ref.read(trainingPlanLibraryProvider.notifier).updateSelectedPlan(next);
     });
-    ref.watch(trainingPlanLibraryProvider);
+    final libraryState = ref.watch(trainingPlanLibraryProvider);
+    final libraryController = ref.read(trainingPlanLibraryProvider.notifier);
     final state = ref.watch(trainingPlanProvider);
     final controller = ref.read(trainingPlanProvider.notifier);
     final totalDurationText = _formatDuration(state.totalDurationSeconds);
+    final isFreeTraining = libraryState.isFreeTraining;
     const sliverAppBarExpandedHeight = 210.0;
     const sliverAppBarCollapsedThresholdPadding = 8.0;
     const sliverAppBarTitlePadding = EdgeInsets.fromLTRB(16, 0, 16, 12);
@@ -58,7 +61,9 @@ class _TimerPageState extends ConsumerState<TimerPage> {
         height: bottomFloatButtonHeight,
         width: MediaQuery.of(context).size.width - 32,
         child: FloatingActionButton.extended(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TrainingMonitorPage()));
+          },
           backgroundColor: const Color(0xFF2A73F1),
           foregroundColor: Colors.white,
           shape: const StadiumBorder(),
@@ -90,88 +95,122 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                     centerTitle: false,
                     titlePadding: sliverAppBarTitlePadding,
                     title: isCollapsed
-                        ? _CollapsedHeaderContent(title: '总时长', duration: totalDurationText, onConnectPressed: () {})
+                        ? _CollapsedHeaderContent(
+                            title: isFreeTraining ? '自由训练' : '总时长',
+                            duration: totalDurationText,
+                            onConnectPressed: () {},
+                            isFreeTraining: isFreeTraining,
+                          )
                         : null,
                     background: _ExpandedHeaderSection(
-                      title: '总时长',
+                      title: isFreeTraining ? '自由训练' : '总时长',
                       duration: totalDurationText,
                       onConnectPressed: () {},
                       expandedPadding: sliverHeaderExpandedPadding,
+                      isFreeTraining: isFreeTraining,
                     ),
                   );
                 },
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const SizedBox(height: 16),
-                    _PlanNameRow(controller: _nameController, onNameChanged: controller.updateName),
-                    const SizedBox(height: 12),
-                    _NumberCard(
-                      label: '锻炼',
-                      value: state.workSeconds,
-                      unit: '秒',
-                      onMinus: controller.decrementWork,
-                      onPlus: controller.incrementWork,
-                    ),
-                    const SizedBox(height: 12),
-                    _NumberCard(
-                      label: '休息',
-                      value: state.restSeconds,
-                      unit: '秒',
-                      onMinus: controller.decrementRest,
-                      onPlus: controller.incrementRest,
-                    ),
-                    const SizedBox(height: 12),
-                    _NumberCard(
-                      label: '循环',
-                      value: state.cycles,
-                      unit: '次',
-                      onMinus: controller.decrementCycles,
-                      onPlus: controller.incrementCycles,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {},
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF2E2E2E),
-                              backgroundColor: Colors.white,
-                              side: BorderSide.none,
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: const Text('自由训练'),
+            if (isFreeTraining)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: <Widget>[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () => libraryController.setFreeTraining(false),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF2E2E2E),
+                            backgroundColor: Colors.white,
+                            side: BorderSide.none,
+                            shape: const StadiumBorder(),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
+                          child: const Text('切换计划训练'),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _showPlanSelector(context),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF2E2E2E),
-                              backgroundColor: Colors.white,
-                              side: BorderSide.none,
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(height: bottomFloatButtonHeight + 16),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const SizedBox(height: 16),
+                      _PlanNameRow(controller: _nameController, onNameChanged: controller.updateName),
+                      const SizedBox(height: 12),
+                      _NumberCard(
+                        label: '锻炼',
+                        value: state.workSeconds,
+                        unit: '秒',
+                        onMinus: controller.decrementWork,
+                        onPlus: controller.incrementWork,
+                      ),
+                      const SizedBox(height: 12),
+                      _NumberCard(
+                        label: '休息',
+                        value: state.restSeconds,
+                        unit: '秒',
+                        onMinus: controller.decrementRest,
+                        onPlus: controller.incrementRest,
+                      ),
+                      const SizedBox(height: 12),
+                      _NumberCard(
+                        label: '循环',
+                        value: state.cycles,
+                        unit: '次',
+                        onMinus: controller.decrementCycles,
+                        onPlus: controller.incrementCycles,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => libraryController.setFreeTraining(true),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF2E2E2E),
+                                backgroundColor: Colors.white,
+                                side: BorderSide.none,
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: const Text('切换自由训练'),
                             ),
-                            child: const Text('选择计划'),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(height: bottomFloatButtonHeight + 16),
-                  ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => _showPlanSelector(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF2E2E2E),
+                                backgroundColor: Colors.white,
+                                side: BorderSide.none,
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: const Text('选择计划'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(height: bottomFloatButtonHeight + 16),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -489,12 +528,14 @@ class _ExpandedHeaderSection extends StatelessWidget {
     required this.duration,
     required this.onConnectPressed,
     required this.expandedPadding,
+    required this.isFreeTraining,
   });
 
   final String title;
   final String duration;
   final VoidCallback onConnectPressed;
   final EdgeInsets expandedPadding;
+  final bool isFreeTraining;
 
   @override
   Widget build(BuildContext context) {
@@ -512,16 +553,34 @@ class _ExpandedHeaderSection extends StatelessWidget {
         bottom: false,
         child: Column(
           children: <Widget>[
-            Text(
-              title,
-              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (isFreeTraining)
+                      Text(
+                        title,
+                        style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w700),
+                      )
+                    else ...<Widget>[
+                      Text(
+                        title,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        duration,
+                        style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-            Text(
-              duration,
-              style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w700),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _BluetoothCard(onConnectPressed: onConnectPressed),
             ),
-            const SizedBox(height: 12),
-            _BluetoothCard(onConnectPressed: onConnectPressed),
           ],
         ),
       ),
@@ -530,32 +589,43 @@ class _ExpandedHeaderSection extends StatelessWidget {
 }
 
 class _CollapsedHeaderContent extends StatelessWidget {
-  const _CollapsedHeaderContent({required this.title, required this.duration, required this.onConnectPressed});
+  const _CollapsedHeaderContent({
+    required this.title,
+    required this.duration,
+    required this.onConnectPressed,
+    required this.isFreeTraining,
+  });
 
   final String title;
   final String duration;
   final VoidCallback onConnectPressed;
+  final bool isFreeTraining;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: <Widget>[
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                duration,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
+          child: isFreeTraining
+              ? Text(
+                  title,
+                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      duration,
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
         ),
         _BluetoothIconButton(onConnectPressed: onConnectPressed),
       ],
