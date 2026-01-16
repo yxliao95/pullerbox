@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+import '../../models/training_plan.dart';
 import '../../provider/training_plan_provider.dart';
 
 class TimerPage extends ConsumerStatefulWidget {
@@ -34,6 +35,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
     ref.listen<TrainingPlanState>(trainingPlanProvider, (previous, next) {
       ref.read(trainingPlanLibraryProvider.notifier).updateSelectedPlan(next);
     });
+    ref.watch(trainingPlanLibraryProvider);
     final state = ref.watch(trainingPlanProvider);
     final controller = ref.read(trainingPlanProvider.notifier);
     final totalDurationText = _formatDuration(state.totalDurationSeconds);

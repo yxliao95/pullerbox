@@ -1,34 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class TrainingPlanState {
-  const TrainingPlanState({
-    required this.name,
-    required this.workSeconds,
-    required this.restSeconds,
-    required this.cycles,
-  });
-
-  final String name;
-  final int workSeconds;
-  final int restSeconds;
-  final int cycles;
-
-  TrainingPlanState copyWith({String? name, int? workSeconds, int? restSeconds, int? cycles}) {
-    return TrainingPlanState(
-      name: name ?? this.name,
-      workSeconds: workSeconds ?? this.workSeconds,
-      restSeconds: restSeconds ?? this.restSeconds,
-      cycles: cycles ?? this.cycles,
-    );
-  }
-
-  int get totalDurationSeconds {
-    if (cycles <= 0) {
-      return 0;
-    }
-    return (workSeconds + restSeconds) * cycles;
-  }
-}
+import '../models/training_plan.dart';
+import '../services/training_plan_storage.dart';
 
 class TrainingPlanController extends Notifier<TrainingPlanState> {
   @override
@@ -74,13 +49,7 @@ class TrainingPlanController extends Notifier<TrainingPlanState> {
 }
 
 final trainingPlanProvider = NotifierProvider<TrainingPlanController, TrainingPlanState>(TrainingPlanController.new);
-
-class TrainingPlanItem {
-  const TrainingPlanItem({required this.id, required this.plan});
-
-  final String id;
-  final TrainingPlanState plan;
-}
+final trainingPlanStorageProvider = Provider<TrainingPlanStorage>((ref) => TrainingPlanStorage());
 
 class TrainingPlanLibraryState {
   const TrainingPlanLibraryState({
@@ -113,6 +82,12 @@ class TrainingPlanLibraryState {
 class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
   @override
   TrainingPlanLibraryState build() {
+    final initialState = _defaultLibraryState();
+    unawaited(_restoreLibrary());
+    return initialState;
+  }
+
+  TrainingPlanLibraryState _defaultLibraryState() {
     const defaultPlan = TrainingPlanState(name: '默认', workSeconds: 7, restSeconds: 3, cycles: 20);
     final initialPlans = <TrainingPlanItem>[
       const TrainingPlanItem(id: 'default', plan: defaultPlan),
@@ -137,6 +112,30 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
     );
   }
 
+  Future<void> _restoreLibrary() async {
+    final snapshot = await ref.read(trainingPlanStorageProvider).loadLibrary();
+    if (snapshot == null || snapshot.plans.isEmpty) {
+      return;
+    }
+    final selectedPlanId = snapshot.plans.any((plan) => plan.id == snapshot.selectedPlanId)
+        ? snapshot.selectedPlanId
+        : snapshot.plans.first.id;
+    final activePlan =
+        snapshot.plans.firstWhere((plan) => plan.id == selectedPlanId, orElse: () => snapshot.plans.first);
+    state = state.copyWith(
+      plans: snapshot.plans,
+      selectedPlanId: selectedPlanId,
+      isEditing: false,
+      selectedPlanIds: <String>{},
+    );
+    ref.read(trainingPlanProvider.notifier).applyPlan(activePlan.plan);
+  }
+
+  Future<void> _persistLibrary() async {
+    final snapshot = TrainingPlanLibrarySnapshot(plans: state.plans, selectedPlanId: state.selectedPlanId);
+    await ref.read(trainingPlanStorageProvider).saveLibrary(snapshot);
+  }
+
   void toggleEditing() {
     final isEditing = !state.isEditing;
     state = state.copyWith(isEditing: isEditing, selectedPlanIds: <String>{});
@@ -151,6 +150,7 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
 
   void selectPlan(String planId) {
     state = state.copyWith(selectedPlanId: planId);
+    unawaited(_persistLibrary());
   }
 
   void toggleSelectedPlan(String planId) {
@@ -183,6 +183,7 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
       plans: <TrainingPlanItem>[...state.plans, newPlan],
       selectedPlanId: planId,
     );
+    unawaited(_persistLibrary());
     return planId;
   }
 
@@ -201,12 +202,14 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
         selectedPlanId: newPlan.id,
         selectedPlanIds: <String>{},
       );
+      unawaited(_persistLibrary());
       return true;
     }
     final selectedPlanId = remaining.any((plan) => plan.id == state.selectedPlanId)
         ? state.selectedPlanId
         : remaining.first.id;
     state = state.copyWith(plans: remaining, selectedPlanId: selectedPlanId, selectedPlanIds: <String>{});
+    unawaited(_persistLibrary());
     return false;
   }
 
@@ -218,6 +221,7 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
     final item = updated.removeAt(oldIndex);
     updated.insert(newIndex, item);
     state = state.copyWith(plans: updated);
+    unawaited(_persistLibrary());
   }
 
   void updateSelectedPlan(TrainingPlanState plan) {
@@ -229,6 +233,7 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
         .map((item) => item.id == selectedPlanId ? TrainingPlanItem(id: item.id, plan: plan) : item)
         .toList();
     state = state.copyWith(plans: updated);
+    unawaited(_persistLibrary());
   }
 }
 
