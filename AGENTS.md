@@ -33,3 +33,4 @@ views 直接调用 services
 - Riverpod 3 中移除的 valueOrNull 应该替换为 asData?.value。
 - DropdownButtonFormField 已经不再推荐使用 value + onChanged 的组合，应该使用 initialValue 来代替 value。
 - Unnecessary use of multiple underscores. Try using '_'.
+- views 中的组件应该尽量拆分到独立的 widget 文件中，避免单个文件过大。
