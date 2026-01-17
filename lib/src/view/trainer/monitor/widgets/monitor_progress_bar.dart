@@ -19,7 +19,9 @@ class MonitorProgressBar extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
               widthFactor: progress,
-              child: ColoredBox(color: color),
+              child: SizedBox.expand(
+                child: ColoredBox(color: color),
+              ),
             ),
           ),
           Center(

@@ -30,26 +30,57 @@ class TrainingRecordDetailPage extends StatelessWidget {
           const SizedBox(height: 16),
           const Text('统计数据', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          _detailRow('最大值', '${record.statistics.maxValue.toStringAsFixed(1)}kg'),
+          _detailRow('最大值', _formatStat(record.statistics.maxValue)),
           const SizedBox(height: 8),
-          _detailRow('平均值', '${record.statistics.averageValue.toStringAsFixed(1)}kg'),
+          _detailRow('平均值', _formatStat(record.statistics.averageValue)),
           const SizedBox(height: 8),
-          _detailRow('中位数', '${record.statistics.medianValue.toStringAsFixed(1)}kg'),
+          _detailRow('中位数', _formatStat(record.statistics.medianValue)),
           const SizedBox(height: 16),
           const Text('原始数据', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          ...record.samples.map(
-            (sample) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: _detailRow(
-                '${sample.time.toStringAsFixed(1)}s',
-                '${sample.value.toStringAsFixed(1)}kg',
-              ),
-            ),
-          ),
+          ..._buildGroupedRows(),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildGroupedRows() {
+    if (record.groupedSamples.isEmpty) {
+      return const <Widget>[
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: Text('N/A', style: TextStyle(fontSize: 13, color: Color(0xFF8E8E8E))),
+        ),
+      ];
+    }
+    return record.groupedSamples
+        .map(
+          (group) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('第 ${group.cycle} 组', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              ...group.samples.map(
+                (sample) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: _detailRow(
+                    '${sample.time.toStringAsFixed(1)}s',
+                    '${sample.value.toStringAsFixed(1)}kg',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        )
+        .toList();
+  }
+
+  String _formatStat(double value) {
+    if (record.groupedSamples.isEmpty || value.isNaN || value.isInfinite) {
+      return 'N/A';
+    }
+    return '${value.toStringAsFixed(1)}kg';
   }
 
   Widget _detailRow(String label, String value) {

@@ -18,6 +18,7 @@ class TimerPage extends ConsumerStatefulWidget {
 
 class _TimerPageState extends ConsumerState<TimerPage> {
   late final TextEditingController _nameController;
+  bool _isDeviceConnected = false;
 
   @override
   void initState() {
@@ -63,7 +64,11 @@ class _TimerPageState extends ConsumerState<TimerPage> {
         width: MediaQuery.of(context).size.width - 32,
         child: FloatingActionButton.extended(
           onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute<Widget>(builder: (_) => const TrainingMonitorPage()));
+            Navigator.of(context).push(
+              MaterialPageRoute<Widget>(
+                builder: (_) => TrainingMonitorPage(isDeviceConnected: _isDeviceConnected),
+              ),
+            );
           },
           backgroundColor: const Color(0xFF2A73F1),
           foregroundColor: Colors.white,
@@ -99,16 +104,18 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                         ? TrainingPlanCollapsedHeader(
                             title: isFreeTraining ? '自由训练' : '总时长',
                             duration: totalDurationText,
-                            onConnectPressed: () {},
+                            onConnectPressed: _toggleDeviceConnection,
                             isFreeTraining: isFreeTraining,
+                            isDeviceConnected: _isDeviceConnected,
                           )
                         : null,
                     background: TrainingPlanExpandedHeader(
                       title: isFreeTraining ? '自由训练' : '总时长',
                       duration: totalDurationText,
-                      onConnectPressed: () {},
+                      onConnectPressed: _toggleDeviceConnection,
                       expandedPadding: sliverHeaderExpandedPadding,
                       isFreeTraining: isFreeTraining,
+                      isDeviceConnected: _isDeviceConnected,
                     ),
                   );
                 },
@@ -251,5 +258,11 @@ class _TimerPageState extends ConsumerState<TimerPage> {
     final minuteText = minutes.toString().padLeft(2, '0');
     final secondText = remainSeconds.toString().padLeft(2, '0');
     return '$minuteText:$secondText';
+  }
+
+  void _toggleDeviceConnection() {
+    setState(() {
+      _isDeviceConnected = !_isDeviceConnected;
+    });
   }
 }

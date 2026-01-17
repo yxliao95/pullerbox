@@ -10,7 +10,9 @@ class HistoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final records = ref.watch(trainingRecordProvider).records;
+    final recordState = ref.watch(trainingRecordProvider);
+    final controller = ref.read(trainingRecordProvider.notifier);
+    final records = recordState.records;
     if (records.isEmpty) {
       return const Center(child: Text('暂无训练记录'));
     }
@@ -20,15 +22,26 @@ class HistoryPage extends ConsumerWidget {
       separatorBuilder: (_, _unused) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final record = records[index];
-        return RecordCard(
-          record: record,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (context) => TrainingRecordDetailPage(record: record),
-              ),
-            );
-          },
+        return Dismissible(
+          key: ValueKey<String>(record.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            color: const Color(0xFFE94B4B),
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          onDismissed: (_) => controller.removeRecord(record.id),
+          child: RecordCard(
+            record: record,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => TrainingRecordDetailPage(record: record),
+                ),
+              );
+            },
+          ),
         );
       },
     );

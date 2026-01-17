@@ -17,7 +17,9 @@ import 'widgets/monitor_summary_overlay.dart';
 import 'widgets/monitor_toolbar.dart';
 
 class TrainingMonitorPage extends ConsumerStatefulWidget {
-  const TrainingMonitorPage({super.key});
+  const TrainingMonitorPage({required this.isDeviceConnected, super.key});
+
+  final bool isDeviceConnected;
 
   @override
   ConsumerState<TrainingMonitorPage> createState() => _TrainingMonitorPageState();
@@ -51,11 +53,13 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   List<ChartSample> _samples = <ChartSample>[];
   List<double> _workSecondLimits = <double>[];
   List<double> _workValues = <double>[];
-  List<TrainingSample> _workSamples = <TrainingSample>[];
+  List<TrainingSampleGroup> _groupedWorkSamples = <TrainingSampleGroup>[];
+  List<TrainingSampleGroup>? _pendingGroupedSamples;
   TrainingSummary? _summary;
   double _toolbarHorizontalWidth = 0.0;
   double _exitButtonHeight = 0.0;
   double _workElapsedSeconds = 0.0;
+  double _activeElapsedSeconds = 0.0;
   DateTime _trainingStartedAt = DateTime.now();
 
   @override
@@ -114,6 +118,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     if (_isPaused || _isFinishPending || _isSummaryVisible) {
       return;
     }
+    final isOfflineMode = !widget.isDeviceConnected;
     final plan = ref.read(trainingPlanProvider);
     final phaseDuration = _isPreparing ? _prepareSeconds : (_isWorking ? plan.workSeconds : plan.restSeconds);
     if (phaseDuration <= 0) {
@@ -122,20 +127,27 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     }
 
     _elapsedInPhase += _sampleIntervalSeconds;
-    final rawValue = _nextSampleValue();
-    _smoothedValue = _emaAlpha * rawValue + (1 - _emaAlpha) * _smoothedValue;
+    if (!_isPreparing) {
+      _activeElapsedSeconds += _sampleIntervalSeconds;
+    }
+    final rawValue = isOfflineMode ? 0.0 : _nextSampleValue();
+    _smoothedValue = isOfflineMode ? 0.0 : (_emaAlpha * rawValue + (1 - _emaAlpha) * _smoothedValue);
     _currentValue = _smoothedValue;
-    if (_isWorking && !_isPreparing) {
+    if (!isOfflineMode && _isWorking && !_isPreparing) {
       _workValues.add(_currentValue);
       _workElapsedSeconds += _sampleIntervalSeconds;
-      _workSamples.add(TrainingSample(time: _workElapsedSeconds, value: _currentValue));
+      final sample = TrainingSample(time: _workElapsedSeconds, value: _currentValue);
+      _ensureCycleGroup();
+      _groupedWorkSamples.last.samples.add(sample);
     }
-    _samples = <ChartSample>[..._samples, ChartSample(time: _elapsedInPhase, value: _currentValue)];
-    if (_samples.length > 600) {
-      _samples = _samples.sublist(_samples.length - 600);
-    }
-    if (_currentValue >= _maxValue) {
-      _maxValue = _currentValue;
+    if (!isOfflineMode) {
+      _samples = <ChartSample>[..._samples, ChartSample(time: _elapsedInPhase, value: _currentValue)];
+      if (_samples.length > 600) {
+        _samples = _samples.sublist(_samples.length - 600);
+      }
+      if (_currentValue >= _maxValue) {
+        _maxValue = _currentValue;
+      }
     }
 
     if (_elapsedInPhase >= phaseDuration) {
@@ -171,15 +183,15 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   }
 
   void _completeTraining(TrainingPlanState plan) {
-    _summary = _buildSummary(plan);
-    if (_summary != null) {
-      _saveTrainingRecord(plan, _summary!);
-    }
+    final totalSeconds = _activeElapsedSeconds.ceil();
+    _summary = _buildSummary(plan, totalSecondsOverride: totalSeconds);
+    _pendingGroupedSamples = List<TrainingSampleGroup>.from(_groupedWorkSamples);
     _isFinishPending = true;
     _timer?.cancel();
   }
 
   void _startPhase({required bool isWorking}) {
+    final isOfflineMode = !widget.isDeviceConnected;
     _isPreparing = false;
     _isWorking = isWorking;
     _elapsedInPhase = 0.0;
@@ -189,6 +201,9 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _lastFrameTimestamp = Duration.zero;
     if (isWorking) {
       _workSecondLimits = <double>[_randomInRange(35.0, 70.0)];
+      if (!isOfflineMode) {
+        _ensureCycleGroup();
+      }
     } else {
       _workSecondLimits = <double>[];
     }
@@ -207,12 +222,14 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _currentValue = 0.0;
     _smoothedValue = 0.0;
     _workValues = <double>[];
-    _workSamples = <TrainingSample>[];
+    _groupedWorkSamples = <TrainingSampleGroup>[];
     _summary = null;
+    _pendingGroupedSamples = null;
     _isFinishPending = false;
     _isSummaryVisible = false;
     _recordSaved = false;
     _workElapsedSeconds = 0.0;
+    _activeElapsedSeconds = 0.0;
     _trainingStartedAt = DateTime.now();
   }
 
@@ -305,9 +322,13 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final plan = ref.watch(trainingPlanProvider);
     final totalCycles = math.max(1, plan.cycles);
     final phaseDuration = _isPreparing ? _prepareSeconds : (_isWorking ? plan.workSeconds : plan.restSeconds);
-    final progressColor = _isWorking ? const Color(0xFF2AC41F) : const Color(0xFFFF4B4B);
-    final phaseColor = _isPreparing ? const Color(0xFF3B7CFF) : progressColor;
+    const workColor = Color(0xFF2AC41F);
+    const restColor = Color(0xFFFF4B4B);
+    const prepareColor = Color(0xFF3B7CFF);
+    final progressColor = _isWorking ? workColor : restColor;
+    final phaseColor = _isPreparing ? prepareColor : progressColor;
 
+    final isOfflineMode = !widget.isDeviceConnected;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F2),
       body: SafeArea(
@@ -318,40 +339,49 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                 Expanded(
                   child: Stack(
                     children: <Widget>[
-                      Positioned.fill(
-                        child: RepaintBoundary(
-                          child: MonitorChartPanel(
-                            samples: _samples,
-                            displayTimeListenable: _displayTime,
-                            isPreparing: _isPreparing,
-                            isWorking: _isWorking,
-                            maxValue: _maxValue,
-                            phaseDuration: phaseDuration.toDouble(),
+                      if (!isOfflineMode)
+                        Positioned.fill(
+                          child: RepaintBoundary(
+                            child: MonitorChartPanel(
+                              samples: _samples,
+                              displayTimeListenable: _displayTime,
+                              isPreparing: _isPreparing,
+                              isWorking: _isWorking,
+                              maxValue: _maxValue,
+                              phaseDuration: phaseDuration.toDouble(),
+                            ),
                           ),
                         ),
-                      ),
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                      if (!isOfflineMode)
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              '实时拉力：${_currentValue.toStringAsFixed(1)} KG',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                            ),
+                          ),
+                        ),
+                      if (isOfflineMode && _isWorking && !_isPreparing)
+                        const Center(
                           child: Text(
-                            '实时拉力：${_currentValue.toStringAsFixed(1)} KG',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                            '锻炼',
+                            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: workColor),
                           ),
                         ),
-                      ),
                       if (_isPreparing)
                         const Center(
                           child: Text(
                             '准备',
-                            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: Color(0xFF3B7CFF)),
+                            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: prepareColor),
                           ),
                         )
                       else if (!_isWorking)
                         const Center(
                           child: Text(
                             '休息',
-                            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: Colors.black87),
+                            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: restColor),
                           ),
                         ),
                     ],
@@ -372,7 +402,12 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
             ),
             if (_isSummaryVisible && _summary != null)
               Positioned.fill(
-                child: MonitorSummaryOverlay(summary: _summary!, onExit: () => Navigator.of(context).maybePop()),
+                child: MonitorSummaryOverlay(
+                  summary: _summary!,
+                  showStatistics: !isOfflineMode,
+                  onExitWithoutSave: _exitWithoutSave,
+                  onSaveAndExit: _saveAndExit,
+                ),
               )
             else
               Positioned(
@@ -417,7 +452,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                                   });
                                 }
                               },
-                              child: _ExitButton(onPressed: () => Navigator.of(context).maybePop()),
+                              child: _ExitButton(onPressed: _handleExit),
                             ),
                           ),
                           Center(
@@ -475,7 +510,8 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     );
   }
 
-  TrainingSummary _buildSummary(TrainingPlanState plan) {
+  TrainingSummary _buildSummary(TrainingPlanState plan, {int? completedCycles, int? totalSecondsOverride}) {
+    final resolvedCycles = completedCycles ?? plan.cycles;
     final values = List<double>.from(_workValues);
     values.sort();
     final maxValue = values.isEmpty ? 0.0 : values.last;
@@ -483,15 +519,15 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final medianValue = values.isEmpty
         ? 0.0
         : (values.length.isOdd
-              ? values[values.length ~/ 2]
-              : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
-    final restCycles = plan.cycles > 0 ? plan.cycles - 1 : 0;
-    final totalSeconds = plan.workSeconds * plan.cycles + plan.restSeconds * restCycles;
+            ? values[values.length ~/ 2]
+            : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
+    final restCycles = resolvedCycles > 0 ? resolvedCycles - 1 : 0;
+    final totalSeconds = totalSecondsOverride ?? plan.workSeconds * resolvedCycles + plan.restSeconds * restCycles;
     return TrainingSummary(
       planName: plan.name,
       workSeconds: plan.workSeconds,
       restSeconds: plan.restSeconds,
-      cycles: plan.cycles,
+      cycles: resolvedCycles,
       totalSeconds: totalSeconds,
       maxValue: maxValue,
       averageValue: averageValue,
@@ -499,19 +535,24 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     );
   }
 
-  void _saveTrainingRecord(TrainingPlanState plan, TrainingSummary summary) {
+  void _saveTrainingRecord(
+    TrainingPlanState plan,
+    TrainingSummary summary, {
+    List<TrainingSampleGroup>? groupedSamples,
+  }) {
     if (_recordSaved) {
       return;
     }
+    final resolvedGroups = groupedSamples ?? _groupedWorkSamples;
     final record = TrainingRecord(
       id: _trainingStartedAt.microsecondsSinceEpoch.toString(),
       planName: plan.name,
       workSeconds: plan.workSeconds,
       restSeconds: plan.restSeconds,
-      cycles: plan.cycles,
+      cycles: summary.cycles,
       totalSeconds: summary.totalSeconds,
       startedAt: _trainingStartedAt,
-      samples: List<TrainingSample>.from(_workSamples),
+      groupedSamples: List<TrainingSampleGroup>.from(resolvedGroups),
       statistics: TrainingStatistics(
         maxValue: summary.maxValue,
         averageValue: summary.averageValue,
@@ -520,6 +561,56 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     );
     ref.read(trainingRecordProvider.notifier).addRecord(record);
     _recordSaved = true;
+  }
+
+  void _ensureCycleGroup() {
+    if (_groupedWorkSamples.length >= _currentCycle) {
+      return;
+    }
+    _groupedWorkSamples.add(TrainingSampleGroup(cycle: _currentCycle, samples: <TrainingSample>[]));
+  }
+
+  void _handleExit() {
+    if (_isSummaryVisible) {
+      _exitWithoutSave();
+      return;
+    }
+    if (_isPreparing) {
+      _exitWithoutSave();
+      return;
+    }
+    final plan = ref.read(trainingPlanProvider);
+    final completedCycles = _isWorking ? math.max(0, _currentCycle - 1) : _currentCycle;
+    final totalSeconds = _activeElapsedSeconds.ceil();
+    final summary = _buildSummary(plan, completedCycles: completedCycles, totalSecondsOverride: totalSeconds);
+    final groupedSamples = _groupedWorkSamples.take(completedCycles).toList();
+    if (_isWorking && widget.isDeviceConnected) {
+      _ensureCycleGroup();
+      final currentGroup = _groupedWorkSamples[_currentCycle - 1];
+      groupedSamples.add(currentGroup);
+    }
+    setState(() {
+      _summary = summary;
+      _pendingGroupedSamples = groupedSamples;
+      _isSummaryVisible = true;
+      _isFinishPending = false;
+    });
+    _timer?.cancel();
+  }
+
+  void _exitWithoutSave() {
+    Navigator.of(context).maybePop();
+  }
+
+  void _saveAndExit() {
+    if (_summary == null) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    final plan = ref.read(trainingPlanProvider);
+    final groupedSamples = _pendingGroupedSamples ?? _groupedWorkSamples;
+    _saveTrainingRecord(plan, _summary!, groupedSamples: groupedSamples);
+    Navigator.of(context).maybePop();
   }
 }
 

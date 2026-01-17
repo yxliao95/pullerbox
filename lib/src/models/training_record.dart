@@ -19,6 +19,31 @@ class TrainingSample {
   }
 }
 
+class TrainingSampleGroup {
+  const TrainingSampleGroup({required this.cycle, required this.samples});
+
+  final int cycle;
+  final List<TrainingSample> samples;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'cycle': cycle,
+      'samples': samples.map((sample) => sample.toJson()).toList(),
+    };
+  }
+
+  factory TrainingSampleGroup.fromJson(Map<String, dynamic> json) {
+    final rawSamples = json['samples'] as List? ?? <dynamic>[];
+    return TrainingSampleGroup(
+      cycle: (json['cycle'] as num?)?.toInt() ?? 1,
+      samples: rawSamples
+          .whereType<Map>()
+          .map((sample) => TrainingSample.fromJson(Map<String, dynamic>.from(sample)))
+          .toList(),
+    );
+  }
+}
+
 class TrainingStatistics {
   const TrainingStatistics({
     required this.maxValue,
@@ -56,7 +81,7 @@ class TrainingRecord {
     required this.cycles,
     required this.totalSeconds,
     required this.startedAt,
-    required this.samples,
+    this.groupedSamples = const <TrainingSampleGroup>[],
     required this.statistics,
   });
 
@@ -67,7 +92,7 @@ class TrainingRecord {
   final int cycles;
   final int totalSeconds;
   final DateTime startedAt;
-  final List<TrainingSample> samples;
+  final List<TrainingSampleGroup> groupedSamples;
   final TrainingStatistics statistics;
 
   Map<String, dynamic> toJson() {
@@ -79,13 +104,13 @@ class TrainingRecord {
       'cycles': cycles,
       'totalSeconds': totalSeconds,
       'startedAt': startedAt.toIso8601String(),
-      'samples': samples.map((sample) => sample.toJson()).toList(),
+      'groupedSamples': groupedSamples.map((group) => group.toJson()).toList(),
       'statistics': statistics.toJson(),
     };
   }
 
   factory TrainingRecord.fromJson(Map<String, dynamic> json) {
-    final rawSamples = json['samples'] as List? ?? <dynamic>[];
+    final rawGroupedSamples = json['groupedSamples'] as List? ?? <dynamic>[];
     final rawStatistics = json['statistics'] as Map? ?? <dynamic, dynamic>{};
     return TrainingRecord(
       id: json['id'] as String? ?? '',
@@ -95,9 +120,9 @@ class TrainingRecord {
       cycles: (json['cycles'] as num?)?.toInt() ?? 0,
       totalSeconds: (json['totalSeconds'] as num?)?.toInt() ?? 0,
       startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ?? DateTime.now(),
-      samples: rawSamples
+      groupedSamples: rawGroupedSamples
           .whereType<Map>()
-          .map((sample) => TrainingSample.fromJson(Map<String, dynamic>.from(sample)))
+          .map((group) => TrainingSampleGroup.fromJson(Map<String, dynamic>.from(group)))
           .toList(),
       statistics: TrainingStatistics.fromJson(Map<String, dynamic>.from(rawStatistics)),
     );

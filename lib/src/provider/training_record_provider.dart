@@ -28,7 +28,16 @@ class TrainingRecordController extends Notifier<TrainingRecordState> {
     if (snapshot == null) {
       return;
     }
-    state = state.copyWith(records: snapshot.records);
+    if (state.records.isEmpty) {
+      state = state.copyWith(records: snapshot.records);
+      return;
+    }
+    final existingIds = state.records.map((record) => record.id).toSet();
+    final merged = <TrainingRecord>[
+      ...state.records,
+      ...snapshot.records.where((record) => !existingIds.contains(record.id)),
+    ];
+    state = state.copyWith(records: merged);
   }
 
   Future<void> _persistHistory() async {
@@ -38,6 +47,13 @@ class TrainingRecordController extends Notifier<TrainingRecordState> {
 
   void addRecord(TrainingRecord record) {
     state = state.copyWith(records: <TrainingRecord>[record, ...state.records]);
+    unawaited(_persistHistory());
+  }
+
+  void removeRecord(String recordId) {
+    state = state.copyWith(
+      records: state.records.where((record) => record.id != recordId).toList(),
+    );
     unawaited(_persistHistory());
   }
 }

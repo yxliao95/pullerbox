@@ -11,6 +11,7 @@ class RecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasStatistics = record.groupedSamples.isNotEmpty;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
@@ -42,9 +43,9 @@ class RecordCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  _StatColumn(label: '最大值', value: record.statistics.maxValue),
-                  _StatColumn(label: '平均值', value: record.statistics.averageValue),
-                  _StatColumn(label: '中位数', value: record.statistics.medianValue),
+                  _StatColumn(label: '最大值', value: _formatStat(record.statistics.maxValue, hasStatistics)),
+                  _StatColumn(label: '平均值', value: _formatStat(record.statistics.averageValue, hasStatistics)),
+                  _StatColumn(label: '中位数', value: _formatStat(record.statistics.medianValue, hasStatistics)),
                 ],
               ),
             ],
@@ -59,7 +60,7 @@ class _StatColumn extends StatelessWidget {
   const _StatColumn({required this.label, required this.value});
 
   final String label;
-  final double value;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +69,15 @@ class _StatColumn extends StatelessWidget {
       children: <Widget>[
         Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E8E))),
         const SizedBox(height: 4),
-        Text('${value.toStringAsFixed(1)}kg', style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }
+}
+
+String _formatStat(double value, bool isAvailable) {
+  if (!isAvailable || value.isNaN || value.isInfinite) {
+    return 'N/A';
+  }
+  return '${value.toStringAsFixed(1)}kg';
 }

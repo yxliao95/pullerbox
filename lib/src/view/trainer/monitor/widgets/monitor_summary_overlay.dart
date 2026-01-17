@@ -25,10 +25,18 @@ class TrainingSummary {
 }
 
 class MonitorSummaryOverlay extends StatefulWidget {
-  const MonitorSummaryOverlay({required this.summary, required this.onExit, super.key});
+  const MonitorSummaryOverlay({
+    required this.summary,
+    required this.showStatistics,
+    required this.onExitWithoutSave,
+    required this.onSaveAndExit,
+    super.key,
+  });
 
   final TrainingSummary summary;
-  final VoidCallback onExit;
+  final bool showStatistics;
+  final VoidCallback onExitWithoutSave;
+  final VoidCallback onSaveAndExit;
 
   @override
   State<MonitorSummaryOverlay> createState() => _MonitorSummaryOverlayState();
@@ -50,20 +58,20 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
             alignment: Alignment.topLeft,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, topPadding, 8, 0),
-              child: MeasureSize(
-                onChange: (size) {
-                  if (size.height != _exitButtonHeight) {
-                    setState(() {
-                      _exitButtonHeight = size.height;
-                    });
-                  }
-                },
-                child: IconButton(
-                  onPressed: widget.onExit,
-                  icon: const Icon(Icons.close, color: Colors.black87),
-                  splashRadius: 18,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                child: MeasureSize(
+                  onChange: (size) {
+                    if (size.height != _exitButtonHeight) {
+                      setState(() {
+                        _exitButtonHeight = size.height;
+                      });
+                    }
+                  },
+                  child: IconButton(
+                    onPressed: widget.onExitWithoutSave,
+                    icon: const Icon(Icons.close, color: Colors.black87),
+                    splashRadius: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                 ),
               ),
             ),
@@ -107,32 +115,61 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _SummaryMetric(label: '最大值', value: '${widget.summary.maxValue.toStringAsFixed(1)}kg'),
-                    const SizedBox(width: 36),
-                    _SummaryMetric(label: '平均值', value: '${widget.summary.averageValue.toStringAsFixed(1)}kg'),
-                    const SizedBox(width: 36),
-                    _SummaryMetric(label: '中位数', value: '${widget.summary.medianValue.toStringAsFixed(1)}kg'),
-                  ],
-                ),
-                const SizedBox(height: 28),
+                if (widget.showStatistics) ...<Widget>[
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _SummaryMetric(label: '最大值', value: '${widget.summary.maxValue.toStringAsFixed(1)}kg'),
+                      const SizedBox(width: 36),
+                      _SummaryMetric(label: '平均值', value: '${widget.summary.averageValue.toStringAsFixed(1)}kg'),
+                      const SizedBox(width: 36),
+                      _SummaryMetric(label: '中位数', value: '${widget.summary.medianValue.toStringAsFixed(1)}kg'),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                ] else
+                  const SizedBox(height: 28),
                 SizedBox(
-                  width: 200,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: widget.onExit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2D76F8),
-                      shape: const StadiumBorder(),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      '退出',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-                    ),
+                  width: 360,
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: OutlinedButton(
+                            onPressed: widget.onExitWithoutSave,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF2D76F8),
+                              side: const BorderSide(color: Color(0xFF2D76F8)),
+                              shape: const StadiumBorder(),
+                            ),
+                            child: const Text(
+                              '直接退出',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            onPressed: widget.onSaveAndExit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2D76F8),
+                              shape: const StadiumBorder(),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              '保存并退出',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

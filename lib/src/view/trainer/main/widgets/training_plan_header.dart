@@ -7,6 +7,7 @@ class TrainingPlanExpandedHeader extends StatelessWidget {
     required this.onConnectPressed,
     required this.expandedPadding,
     required this.isFreeTraining,
+    required this.isDeviceConnected,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class TrainingPlanExpandedHeader extends StatelessWidget {
   final VoidCallback onConnectPressed;
   final EdgeInsets expandedPadding;
   final bool isFreeTraining;
+  final bool isDeviceConnected;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +60,7 @@ class TrainingPlanExpandedHeader extends StatelessWidget {
             ),
             Align(
               alignment: Alignment.bottomCenter,
-              child: BluetoothCard(onConnectPressed: onConnectPressed),
+              child: BluetoothCard(onConnectPressed: onConnectPressed, isDeviceConnected: isDeviceConnected),
             ),
           ],
         ),
@@ -73,6 +75,7 @@ class TrainingPlanCollapsedHeader extends StatelessWidget {
     required this.duration,
     required this.onConnectPressed,
     required this.isFreeTraining,
+    required this.isDeviceConnected,
     super.key,
   });
 
@@ -80,6 +83,7 @@ class TrainingPlanCollapsedHeader extends StatelessWidget {
   final String duration;
   final VoidCallback onConnectPressed;
   final bool isFreeTraining;
+  final bool isDeviceConnected;
 
   @override
   Widget build(BuildContext context) {
@@ -107,16 +111,17 @@ class TrainingPlanCollapsedHeader extends StatelessWidget {
                   ],
                 ),
         ),
-        BluetoothIconButton(onConnectPressed: onConnectPressed),
+        BluetoothIconButton(onConnectPressed: onConnectPressed, isDeviceConnected: isDeviceConnected),
       ],
     );
   }
 }
 
 class BluetoothCard extends StatelessWidget {
-  const BluetoothCard({required this.onConnectPressed, super.key});
+  const BluetoothCard({required this.onConnectPressed, required this.isDeviceConnected, super.key});
 
   final VoidCallback onConnectPressed;
+  final bool isDeviceConnected;
 
   @override
   Widget build(BuildContext context) {
@@ -129,16 +134,22 @@ class BluetoothCard extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const CircleAvatar(
+          CircleAvatar(
             radius: 18,
             backgroundColor: Colors.white,
-            child: Icon(Icons.bluetooth, color: Color(0xFF2A73F1)),
+            child: Icon(
+              isDeviceConnected ? Icons.bluetooth : Icons.bluetooth_disabled,
+              color: isDeviceConnected ? const Color(0xFF2A73F1) : const Color(0xFF9E9E9E),
+            ),
           ),
           const SizedBox(width: 16),
-          const Expanded(
-            child: Text('设备未连接', style: TextStyle(color: Colors.white, fontSize: 14)),
+          Expanded(
+            child: Text(
+              isDeviceConnected ? '设备已连接' : '设备未连接',
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
           ),
-          BluetoothButton(onConnectPressed: onConnectPressed),
+          BluetoothButton(onConnectPressed: onConnectPressed, isDeviceConnected: isDeviceConnected),
         ],
       ),
     );
@@ -146,29 +157,33 @@ class BluetoothCard extends StatelessWidget {
 }
 
 class BluetoothButton extends StatelessWidget {
-  const BluetoothButton({required this.onConnectPressed, super.key});
+  const BluetoothButton({required this.onConnectPressed, required this.isDeviceConnected, super.key});
 
   final VoidCallback onConnectPressed;
+  final bool isDeviceConnected;
 
   @override
   Widget build(BuildContext context) {
+    final buttonText = isDeviceConnected ? '断开连接' : '连接设备';
+    final textColor = isDeviceConnected ? const Color(0xFFE53935) : const Color(0xFF2A73F1);
     return ElevatedButton(
       onPressed: onConnectPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF2A73F1),
+        foregroundColor: textColor,
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       ),
-      child: const Text('连接设备'),
+      child: Text(buttonText),
     );
   }
 }
 
 class BluetoothIconButton extends StatelessWidget {
-  const BluetoothIconButton({required this.onConnectPressed, super.key});
+  const BluetoothIconButton({required this.onConnectPressed, required this.isDeviceConnected, super.key});
 
   final VoidCallback onConnectPressed;
+  final bool isDeviceConnected;
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +194,11 @@ class BluetoothIconButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-        child: const Icon(Icons.bluetooth, color: Color(0xFF2A73F1), size: 20),
+        child: Icon(
+          isDeviceConnected ? Icons.bluetooth : Icons.bluetooth_disabled,
+          color: isDeviceConnected ? const Color(0xFF2A73F1) : const Color(0xFF9E9E9E),
+          size: 20,
+        ),
       ),
     );
   }
