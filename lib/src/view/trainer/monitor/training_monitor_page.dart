@@ -26,12 +26,14 @@ class TrainingMonitorPage extends ConsumerStatefulWidget {
 }
 
 class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with SingleTickerProviderStateMixin {
-  static const double _sampleIntervalSeconds = 0.1;
+  static const double _sampleIntervalSeconds = 0.05;
   static const double _renderLagSeconds = 0.03;
-  static const double _restMaxValue = 1.0;
+  static const double _idleMaxValue = 2.0;
   static const int _prepareSeconds = 3;
   static const double _emaAlpha = 0.25;
   static const double _estimatedToolbarWidth = 136.0;
+  static const double _defaultChartMaxValue = 10.0;
+  static const double _chartMaxTweenSpeed = 6.0;
   final math.Random _random = math.Random();
   final ValueNotifier<double> _displayTime = ValueNotifier<double>(0.0);
 
@@ -49,9 +51,35 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   double _elapsedInPhase = 0.0;
   double _currentValue = 0.0;
   double _smoothedValue = 0.0;
-  double _maxValue = 0.0;
+  double _simulatedValue = 0.0;
+  double _vMax = 0.0;
+  double _vMin = 0.0;
+  int _stableCycleLimit = 0;
+  double _instabilityRangeMin = 0.1;
+  double _instabilityRangeMax = 0.2;
+  bool _fatigueModeActive = false;
+  bool _fatigueModeNext = false;
+  double _cycleStartDuration = 0.0;
+  double _cycleStartValue = 0.0;
+  double _cycleUnstableStartTime = 0.0;
+  bool _cycleHasUnstable = false;
+  bool _fatigueWillDrop = false;
+  double _fatigueDropStartTime = 0.0;
+  double _fatigueDropDuration = 0.0;
+  double _fatigueDropTarget = 0.0;
+  double _fatigueDropStartValue = 0.0;
+  bool _fatigueDropStarted = false;
+  double _startupPendingDelta = 0.0;
+  int _startupHoldRemaining = 0;
+  double _descendingPendingDelta = 0.0;
+  int _descendingHoldRemaining = 0;
+  bool _unstableActive = false;
+  double _chartMaxValue = 0.0;
+  double _chartMaxAnimatedValue = 0.0;
+  bool _chartMaxLocked = false;
+  double _chartMaxReachTime = 0.0;
+  bool _chartMaxFrozen = false;
   List<ChartSample> _samples = <ChartSample>[];
-  List<double> _workSecondLimits = <double>[];
   List<double> _workValues = <double>[];
   List<TrainingSampleGroup> _groupedWorkSamples = <TrainingSampleGroup>[];
   List<TrainingSampleGroup>? _pendingGroupedSamples;
@@ -106,6 +134,15 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     if (nextDisplayTime != _displayTime.value) {
       _displayTime.value = nextDisplayTime;
     }
+    if (_chartMaxAnimatedValue != _chartMaxValue) {
+      final delta = _chartMaxValue - _chartMaxAnimatedValue;
+      final step = delta * math.min(1.0, _chartMaxTweenSpeed * deltaSeconds);
+      _chartMaxAnimatedValue += step;
+      if ((_chartMaxValue - _chartMaxAnimatedValue).abs() < 0.01) {
+        _chartMaxAnimatedValue = _chartMaxValue;
+      }
+      setState(() {});
+    }
     if (_isFinishPending && _displayTime.value >= _elapsedInPhase) {
       setState(() {
         _isFinishPending = false;
@@ -140,13 +177,20 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
       _ensureCycleGroup();
       _groupedWorkSamples.last.samples.add(sample);
     }
+    if (!isOfflineMode && _isWorking && !_isPreparing) {
+      if (_currentCycle == 1 && !_chartMaxFrozen && _currentValue > _chartMaxValue) {
+        _chartMaxValue = _roundToTenth(_currentValue);
+        if (_chartMaxAnimatedValue <= 0) {
+          _chartMaxAnimatedValue = _chartMaxValue;
+        }
+        _chartMaxLocked = true;
+        _chartMaxReachTime = _displayTime.value;
+      }
+    }
     if (!isOfflineMode) {
       _samples = <ChartSample>[..._samples, ChartSample(time: _elapsedInPhase, value: _currentValue)];
       if (_samples.length > 600) {
         _samples = _samples.sublist(_samples.length - 600);
-      }
-      if (_currentValue >= _maxValue) {
-        _maxValue = _currentValue;
       }
     }
 
@@ -163,6 +207,12 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
       return;
     }
     if (_isWorking) {
+      if (_currentCycle == 1 && !_chartMaxFrozen) {
+        _chartMaxFrozen = true;
+        _chartMaxLocked = true;
+        _chartMaxReachTime = _displayTime.value;
+        _chartMaxAnimatedValue = _chartMaxValue;
+      }
       if (_currentCycle >= totalCycles) {
         _completeTraining(plan);
         return;
@@ -196,31 +246,30 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _isWorking = isWorking;
     _elapsedInPhase = 0.0;
     _samples = const <ChartSample>[ChartSample(time: 0.0, value: 0.0)];
-    _maxValue = 0.0;
     _displayTime.value = 0.0;
     _lastFrameTimestamp = Duration.zero;
     if (isWorking) {
-      _workSecondLimits = <double>[_randomInRange(35.0, 70.0)];
+      _prepareWorkSimulation(phaseDurationSeconds: ref.read(trainingPlanProvider).workSeconds.toDouble());
       if (!isOfflineMode) {
         _ensureCycleGroup();
       }
-    } else {
-      _workSecondLimits = <double>[];
     }
     _currentValue = 0.0;
     _smoothedValue = 0.0;
+    _simulatedValue = 0.0;
   }
 
   void _startPreparePhase() {
+    final plan = ref.read(trainingPlanProvider);
     _isPreparing = true;
     _isWorking = true;
     _elapsedInPhase = 0.0;
     _samples = const <ChartSample>[ChartSample(time: 0.0, value: 0.0)];
-    _maxValue = 0.0;
     _displayTime.value = 0.0;
     _lastFrameTimestamp = Duration.zero;
     _currentValue = 0.0;
     _smoothedValue = 0.0;
+    _simulatedValue = 0.0;
     _workValues = <double>[];
     _groupedWorkSamples = <TrainingSampleGroup>[];
     _summary = null;
@@ -231,42 +280,24 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _workElapsedSeconds = 0.0;
     _activeElapsedSeconds = 0.0;
     _trainingStartedAt = DateTime.now();
+    _chartMaxValue = _defaultChartMaxValue;
+    _chartMaxAnimatedValue = _chartMaxValue;
+    _chartMaxLocked = true;
+    _chartMaxReachTime = 0.0;
+    _chartMaxFrozen = false;
+    final totalCycles = math.max(1, plan.cycles);
+    _prepareSessionSimulation(totalCycles: totalCycles);
   }
 
   double _nextSampleValue() {
-    if (_isPreparing) {
-      return 0.0;
+    if (_isPreparing || !_isWorking) {
+      final value = _randomInRange(0.0, _idleMaxValue);
+      _simulatedValue = value;
+      return _roundToTenth(value);
     }
-    if (!_isWorking) {
-      return _roundToTenth(_random.nextDouble() * _restMaxValue);
-    }
-    final second = _elapsedInPhase.floor();
-    final nextSecond = second + 1;
-    final currentLimit = _limitForSecond(second);
-    final nextLimit = _limitForSecond(nextSecond);
-    double minLimit = math.min(currentLimit, nextLimit);
-    double maxLimit = math.max(currentLimit, nextLimit);
-    if (_elapsedInPhase < 1.0) {
-      final progress = _elapsedInPhase.clamp(0.0, 1.0);
-      maxLimit = currentLimit * progress;
-      minLimit = 0.0;
-    }
-    return _roundToTenth(_randomInRange(minLimit, maxLimit));
-  }
-
-  double _limitForSecond(int second) {
-    if (second < 0) {
-      return 0.0;
-    }
-    if (second < _workSecondLimits.length) {
-      return _workSecondLimits[second];
-    }
-    for (var i = _workSecondLimits.length; i <= second; i++) {
-      final previous = _workSecondLimits.last;
-      final decay = _randomInRange(0.7, 0.9);
-      _workSecondLimits.add(previous * decay);
-    }
-    return _workSecondLimits[second];
+    final value = _fatigueModeActive ? _nextFatigueValue() : _nextWorkingValue();
+    _simulatedValue = value;
+    return _roundToTenth(value);
   }
 
   double _randomInRange(double min, double max) {
@@ -278,6 +309,175 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
 
   double _roundToTenth(double value) {
     return (value * 10).roundToDouble() / 10;
+  }
+
+  void _prepareSessionSimulation({required int totalCycles}) {
+    _vMax = _randomInRange(15.0, 50.0);
+    _vMin = _vMax * _randomInRange(0.3, 0.5);
+    final unstableRatio = _randomInRange(0.4, 0.6);
+    _stableCycleLimit = math.max(1, (totalCycles * unstableRatio).round());
+    _instabilityRangeMin = 0.1;
+    _instabilityRangeMax = 0.2;
+    _fatigueModeActive = false;
+    _fatigueModeNext = false;
+    _chartMaxValue = _defaultChartMaxValue;
+    _chartMaxAnimatedValue = _chartMaxValue;
+    _chartMaxLocked = true;
+    _chartMaxReachTime = 0.0;
+    _chartMaxFrozen = false;
+  }
+
+  void _prepareWorkSimulation({required double phaseDurationSeconds}) {
+    _fatigueModeActive = _fatigueModeNext;
+    _cycleStartDuration = _randomInRange(0.7, 1.3);
+    _cycleStartValue = _fatigueModeActive ? _randomInRange(0.0, 0.5) : _randomInRange(0.0, _idleMaxValue);
+    _cycleHasUnstable = !_fatigueModeActive && _currentCycle > _stableCycleLimit;
+    _cycleUnstableStartTime = 0.0;
+    _startupPendingDelta = 0.0;
+    _startupHoldRemaining = 0;
+    _descendingPendingDelta = 0.0;
+    _descendingHoldRemaining = 0;
+    _unstableActive = false;
+    if (_cycleHasUnstable && phaseDurationSeconds > 0) {
+      final ratio = _randomInRange(_instabilityRangeMin, _instabilityRangeMax);
+      final unstableDuration = ratio * phaseDurationSeconds;
+      _cycleUnstableStartTime = (phaseDurationSeconds - unstableDuration).clamp(
+        _cycleStartDuration,
+        phaseDurationSeconds,
+      );
+      if (ratio > 0.5) {
+        _fatigueModeNext = true;
+      }
+    }
+    if (_cycleHasUnstable) {
+      _advanceInstabilityRange();
+    }
+    _prepareFatigueDrop(phaseDurationSeconds);
+  }
+
+  void _advanceInstabilityRange() {
+    final delta = _randomInRange(0.1, 0.2);
+    _instabilityRangeMax = (_instabilityRangeMax + delta).clamp(_instabilityRangeMin, 1.0);
+  }
+
+  void _prepareFatigueDrop(double phaseDurationSeconds) {
+    _fatigueWillDrop = _fatigueModeActive && _random.nextDouble() < 0.3;
+    _fatigueDropStarted = false;
+    _fatigueDropStartValue = 0.0;
+    if (!_fatigueWillDrop) {
+      _fatigueDropStartTime = 0.0;
+      _fatigueDropDuration = 0.0;
+      _fatigueDropTarget = 0.0;
+      return;
+    }
+    final dropWindowSeconds = _randomInRange(1.0, 3.0);
+    _fatigueDropDuration = _randomInRange(0.2, 0.5);
+    _fatigueDropTarget = _randomInRange(0.0, 1.0);
+    var dropStart = phaseDurationSeconds - dropWindowSeconds;
+    dropStart = dropStart.clamp(_cycleStartDuration, phaseDurationSeconds);
+    if (dropStart + _fatigueDropDuration > phaseDurationSeconds) {
+      dropStart = (phaseDurationSeconds - _fatigueDropDuration).clamp(_cycleStartDuration, phaseDurationSeconds);
+    }
+    _fatigueDropStartTime = dropStart;
+  }
+
+  double _nextWorkingValue() {
+    final time = _elapsedInPhase;
+    if (time <= _cycleStartDuration && _cycleStartDuration > 0) {
+      return _nextStartupSample(targetValue: _vMax);
+    }
+    if (_cycleHasUnstable && time >= _cycleUnstableStartTime) {
+      if (!_unstableActive) {
+        _unstableActive = true;
+        _descendingPendingDelta = 0.0;
+        _descendingHoldRemaining = 0;
+      }
+      final nextValue = math.max(_vMin, _simulatedValue - _randomInRange(0.3, 1.2));
+      if (nextValue <= _vMin) {
+        return (_vMin + _randomInRange(-1.5, 1.5)).clamp(0.0, _vMax);
+      }
+      return _nextDescendingSample(targetValue: nextValue);
+    }
+    return (_vMax + _randomInRange(-1.5, 1.5)).clamp(0.0, _vMax);
+  }
+
+  double _nextFatigueValue() {
+    final time = _elapsedInPhase;
+    if (time <= _cycleStartDuration && _cycleStartDuration > 0) {
+      return _nextStartupSample(targetValue: _vMin);
+    }
+    if (_fatigueWillDrop && time >= _fatigueDropStartTime) {
+      if (!_fatigueDropStarted) {
+        _fatigueDropStarted = true;
+        _fatigueDropStartValue = _simulatedValue;
+        _descendingPendingDelta = 0.0;
+        _descendingHoldRemaining = 0;
+      }
+      final dropProgress = ((time - _fatigueDropStartTime) / _fatigueDropDuration).clamp(0.0, 1.0);
+      if (dropProgress >= 1.0) {
+        return _randomInRange(0.0, _fatigueDropTarget);
+      }
+      final nextProgress = ((time + _sampleIntervalSeconds - _fatigueDropStartTime) / _fatigueDropDuration).clamp(
+        0.0,
+        1.0,
+      );
+      final nextValue = _lerpValue(_fatigueDropStartValue, _fatigueDropTarget, nextProgress);
+      return _nextDescendingSample(targetValue: nextValue);
+    }
+    return (_vMin + _randomInRange(-1.5, 1.5)).clamp(0.0, _vMin);
+  }
+
+  double _lerpValue(double start, double end, double t) {
+    final clampedT = t.clamp(0.0, 1.0);
+    return start + (end - start) * clampedT;
+  }
+
+  double _nextStartupSample({required double targetValue}) {
+    if (_cycleStartDuration <= 0) {
+      return targetValue;
+    }
+    if (_startupHoldRemaining == 0) {
+      _startupHoldRemaining = _random.nextInt(4);
+    }
+    final nextTime = (_elapsedInPhase + _sampleIntervalSeconds).clamp(0.0, _cycleStartDuration);
+    final ratio = (nextTime / _cycleStartDuration).clamp(0.0, 1.0);
+    final baselineNext = _lerpValue(_cycleStartValue, targetValue, ratio);
+    final baselineDelta = baselineNext - _simulatedValue;
+    final totalDelta = baselineDelta + _startupPendingDelta;
+    double appliedDelta;
+    if (_startupHoldRemaining > 0) {
+      final scale = _randomInRange(0.1, 0.3);
+      appliedDelta = totalDelta * scale;
+      _startupPendingDelta = totalDelta - appliedDelta;
+      _startupHoldRemaining -= 1;
+    } else {
+      appliedDelta = totalDelta;
+      _startupPendingDelta = 0.0;
+    }
+    final minValue = math.min(_simulatedValue, targetValue);
+    final maxValue = math.max(_simulatedValue, targetValue);
+    return (_simulatedValue + appliedDelta).clamp(minValue, maxValue);
+  }
+
+  double _nextDescendingSample({required double targetValue}) {
+    if (_descendingHoldRemaining == 0) {
+      _descendingHoldRemaining = _random.nextInt(4);
+    }
+    final baselineDelta = targetValue - _simulatedValue;
+    final totalDelta = baselineDelta + _descendingPendingDelta;
+    double appliedDelta;
+    if (_descendingHoldRemaining > 0) {
+      final scale = _randomInRange(0.1, 0.3);
+      appliedDelta = totalDelta * scale;
+      _descendingPendingDelta = totalDelta - appliedDelta;
+      _descendingHoldRemaining -= 1;
+    } else {
+      appliedDelta = totalDelta;
+      _descendingPendingDelta = 0.0;
+    }
+    final minValue = math.min(_simulatedValue, targetValue);
+    final maxValue = math.max(_simulatedValue, targetValue);
+    return (_simulatedValue + appliedDelta).clamp(minValue, maxValue);
   }
 
   void _togglePause() {
@@ -347,7 +547,9 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                               displayTimeListenable: _displayTime,
                               isPreparing: _isPreparing,
                               isWorking: _isWorking,
-                              maxValue: _maxValue,
+                              targetMaxValue: _chartMaxAnimatedValue,
+                              isMaxLineLocked: _chartMaxLocked,
+                              maxLineLockTime: _chartMaxReachTime,
                               phaseDuration: phaseDuration.toDouble(),
                             ),
                           ),
@@ -356,10 +558,51 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                         Align(
                           alignment: Alignment.bottomCenter,
                           child: Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              '实时拉力：${_currentValue.toStringAsFixed(1)} KG',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                            padding: const EdgeInsets.all(8.0),
+                            child: Container(
+                              width: 110,
+                              padding: const EdgeInsets.only(top: 8, bottom: 8),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                              child: Align(
+                                alignment: Alignment.center,
+                                heightFactor: 1,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    RichText(
+                                      text: TextSpan(
+                                        children: <TextSpan>[
+                                          TextSpan(
+                                            text: _currentValue.toStringAsFixed(1),
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: ' kg',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w400,
+                                              color: Colors.black54,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_chartMaxValue <= 0 ? 0 : (_currentValue / _chartMaxValue * 100).round()}%',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -519,8 +762,8 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final medianValue = values.isEmpty
         ? 0.0
         : (values.length.isOdd
-            ? values[values.length ~/ 2]
-            : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
+              ? values[values.length ~/ 2]
+              : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
     final restCycles = resolvedCycles > 0 ? resolvedCycles - 1 : 0;
     final totalSeconds = totalSecondsOverride ?? plan.workSeconds * resolvedCycles + plan.restSeconds * restCycles;
     return TrainingSummary(
