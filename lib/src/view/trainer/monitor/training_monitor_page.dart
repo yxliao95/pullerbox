@@ -10,6 +10,7 @@ import '../../../models/training_plan.dart';
 import '../../../models/training_record.dart';
 import '../../../provider/training_plan_provider.dart';
 import '../../../provider/training_record_provider.dart';
+import '../../../provider/training_statistics_provider.dart';
 import 'widgets/measure_size.dart';
 import 'widgets/monitor_chart.dart';
 import 'widgets/monitor_progress_bar.dart';
@@ -234,7 +235,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
 
   void _completeTraining(TrainingPlanState plan) {
     final totalSeconds = _activeElapsedSeconds.ceil();
-    _summary = _buildSummary(plan, totalSecondsOverride: totalSeconds);
+    _summary = _buildSummary(plan, _groupedWorkSamples, totalSecondsOverride: totalSeconds);
     _pendingGroupedSamples = List<TrainingSampleGroup>.from(_groupedWorkSamples);
     _isFinishPending = true;
     _timer?.cancel();
@@ -753,17 +754,19 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     );
   }
 
-  TrainingSummary _buildSummary(TrainingPlanState plan, {int? completedCycles, int? totalSecondsOverride}) {
+  TrainingSummary _buildSummary(
+    TrainingPlanState plan,
+    List<TrainingSampleGroup> groupedSamples, {
+    int? completedCycles,
+    int? totalSecondsOverride,
+  }) {
     final resolvedCycles = completedCycles ?? plan.cycles;
-    final values = List<double>.from(_workValues);
-    values.sort();
-    final maxValue = values.isEmpty ? 0.0 : values.last;
-    final averageValue = values.isEmpty ? 0.0 : values.reduce((a, b) => a + b) / values.length;
-    final medianValue = values.isEmpty
-        ? 0.0
-        : (values.length.isOdd
-              ? values[values.length ~/ 2]
-              : (values[values.length ~/ 2 - 1] + values[values.length ~/ 2]) / 2);
+    final calculator = ref.read(trainingStatisticsCalculatorProvider);
+    final statistics = calculator.calculate(
+      groupedSamples: groupedSamples,
+      workSeconds: plan.workSeconds,
+      sampleIntervalSeconds: _sampleIntervalSeconds,
+    );
     final restCycles = resolvedCycles > 0 ? resolvedCycles - 1 : 0;
     final totalSeconds = totalSecondsOverride ?? plan.workSeconds * resolvedCycles + plan.restSeconds * restCycles;
     return TrainingSummary(
@@ -772,9 +775,8 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
       restSeconds: plan.restSeconds,
       cycles: resolvedCycles,
       totalSeconds: totalSeconds,
-      maxValue: maxValue,
-      averageValue: averageValue,
-      medianValue: medianValue,
+      statistics: statistics,
+      hasStatistics: groupedSamples.isNotEmpty,
     );
   }
 
@@ -796,11 +798,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
       totalSeconds: summary.totalSeconds,
       startedAt: _trainingStartedAt,
       groupedSamples: List<TrainingSampleGroup>.from(resolvedGroups),
-      statistics: TrainingStatistics(
-        maxValue: summary.maxValue,
-        averageValue: summary.averageValue,
-        medianValue: summary.medianValue,
-      ),
+      statistics: summary.statistics,
     );
     ref.read(trainingRecordProvider.notifier).addRecord(record);
     _recordSaved = true;
@@ -825,13 +823,18 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final plan = ref.read(trainingPlanProvider);
     final completedCycles = _isWorking ? math.max(0, _currentCycle - 1) : _currentCycle;
     final totalSeconds = _activeElapsedSeconds.ceil();
-    final summary = _buildSummary(plan, completedCycles: completedCycles, totalSecondsOverride: totalSeconds);
     final groupedSamples = _groupedWorkSamples.take(completedCycles).toList();
     if (_isWorking && widget.isDeviceConnected) {
       _ensureCycleGroup();
       final currentGroup = _groupedWorkSamples[_currentCycle - 1];
       groupedSamples.add(currentGroup);
     }
+    final summary = _buildSummary(
+      plan,
+      groupedSamples,
+      completedCycles: completedCycles,
+      totalSecondsOverride: totalSeconds,
+    );
     setState(() {
       _summary = summary;
       _pendingGroupedSamples = groupedSamples;

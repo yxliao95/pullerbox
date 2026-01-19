@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../models/training_record.dart';
 import 'measure_size.dart';
 
 class TrainingSummary {
@@ -9,9 +10,8 @@ class TrainingSummary {
     required this.restSeconds,
     required this.cycles,
     required this.totalSeconds,
-    required this.maxValue,
-    required this.averageValue,
-    required this.medianValue,
+    required this.statistics,
+    required this.hasStatistics,
   });
 
   final String planName;
@@ -19,9 +19,8 @@ class TrainingSummary {
   final int restSeconds;
   final int cycles;
   final int totalSeconds;
-  final double maxValue;
-  final double averageValue;
-  final double medianValue;
+  final TrainingStatistics statistics;
+  final bool hasStatistics;
 }
 
 class MonitorSummaryOverlay extends StatefulWidget {
@@ -58,20 +57,20 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
             alignment: Alignment.topLeft,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, topPadding, 8, 0),
-                child: MeasureSize(
-                  onChange: (size) {
-                    if (size.height != _exitButtonHeight) {
-                      setState(() {
-                        _exitButtonHeight = size.height;
-                      });
-                    }
-                  },
-                  child: IconButton(
-                    onPressed: widget.onExitWithoutSave,
-                    icon: const Icon(Icons.close, color: Colors.black87),
-                    splashRadius: 18,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+              child: MeasureSize(
+                onChange: (size) {
+                  if (size.height != _exitButtonHeight) {
+                    setState(() {
+                      _exitButtonHeight = size.height;
+                    });
+                  }
+                },
+                child: IconButton(
+                  onPressed: widget.onExitWithoutSave,
+                  icon: const Icon(Icons.close, color: Colors.black87),
+                  splashRadius: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
               ),
             ),
@@ -115,17 +114,13 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                     ),
                   ],
                 ),
-                if (widget.showStatistics) ...<Widget>[
+                if (widget.showStatistics && widget.summary.hasStatistics) ...<Widget>[
                   const SizedBox(height: 20),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      _SummaryMetric(label: '最大值', value: '${widget.summary.maxValue.toStringAsFixed(1)}kg'),
-                      const SizedBox(width: 36),
-                      _SummaryMetric(label: '平均值', value: '${widget.summary.averageValue.toStringAsFixed(1)}kg'),
-                      const SizedBox(width: 36),
-                      _SummaryMetric(label: '中位数', value: '${widget.summary.medianValue.toStringAsFixed(1)}kg'),
-                    ],
+                  Wrap(
+                    spacing: 36,
+                    runSpacing: 16,
+                    alignment: WrapAlignment.center,
+                    children: _buildStatisticsMetrics(widget.summary.statistics),
                   ),
                   const SizedBox(height: 28),
                 ] else
@@ -184,6 +179,40 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
     final minutes = seconds ~/ 60;
     final remaining = seconds % 60;
     return '${minutes.toString()}:${remaining.toString().padLeft(2, '0')}';
+  }
+
+  List<Widget> _buildStatisticsMetrics(TrainingStatistics statistics) {
+    final hasFatigue = statistics.fatigueStartCycle > 0;
+    final fatigueLabel = hasFatigue
+        ? '第${statistics.fatigueStartCycle}轮 / ${statistics.fatigueStartTime.toStringAsFixed(1)}s'
+        : '未触发';
+    final minControlLabel = hasFatigue
+        ? (statistics.minControlStrengthMissing ? '缺失' : _formatWeight(statistics.minControlStrength))
+        : '未触发';
+    return <Widget>[
+      _SummaryMetric(label: '最大力量', value: _formatWeight(statistics.maxStrengthSession)),
+      _SummaryMetric(label: '最大控制力量', value: _formatWeight(statistics.maxControlStrengthSession)),
+      _SummaryMetric(label: '控制循环数', value: statistics.controlCycles.toString()),
+      _SummaryMetric(label: '力竭信号', value: fatigueLabel),
+      _SummaryMetric(label: '最低控制力量', value: minControlLabel),
+      _SummaryMetric(label: '降幅均值', value: _formatPercent(statistics.dropMean, hasFatigue)),
+      _SummaryMetric(label: '降幅最大', value: _formatPercent(statistics.dropMax, hasFatigue)),
+      _SummaryMetric(label: '降幅标准差', value: _formatPercent(statistics.dropStd, hasFatigue)),
+    ];
+  }
+
+  String _formatWeight(double value) {
+    if (value.isNaN || value.isInfinite) {
+      return 'N/A';
+    }
+    return '${value.toStringAsFixed(1)}kg';
+  }
+
+  String _formatPercent(double value, bool isAvailable) {
+    if (!isAvailable || value.isNaN || value.isInfinite) {
+      return 'N/A';
+    }
+    return '${(value * 100).toStringAsFixed(1)}%';
   }
 }
 
