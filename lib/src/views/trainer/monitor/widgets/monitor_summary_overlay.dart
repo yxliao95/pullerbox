@@ -1,27 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../models/training_record.dart';
+import '../../../../models/training_summary.dart';
 import 'measure_size.dart';
-
-class TrainingSummary {
-  const TrainingSummary({
-    required this.planName,
-    required this.workSeconds,
-    required this.restSeconds,
-    required this.cycles,
-    required this.totalSeconds,
-    required this.statistics,
-    required this.hasStatistics,
-  });
-
-  final String planName;
-  final int workSeconds;
-  final int restSeconds;
-  final int cycles;
-  final int totalSeconds;
-  final TrainingStatistics statistics;
-  final bool hasStatistics;
-}
 
 class MonitorSummaryOverlay extends StatefulWidget {
   const MonitorSummaryOverlay({
@@ -91,47 +72,44 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
             ),
           ),
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    widget.summary.planName,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _SummaryMetric(
-                      label: '锻炼 / 休息 / 循环',
-                      value:
-                          '${widget.summary.workSeconds} / ${widget.summary.restSeconds} / ${widget.summary.cycles}',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.center,
+                    child: Text(
+                      widget.summary.planName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(width: 48),
-                    _SummaryMetric(
-                      label: '总时间',
-                      value: _formatDuration(widget.summary.totalSeconds),
-                    ),
-                  ],
-                ),
-                if (widget.showStatistics && widget.summary.hasStatistics) ...<Widget>[
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 36,
-                    runSpacing: 16,
-                    alignment: WrapAlignment.center,
-                    children: _buildStatisticsMetrics(widget.summary.statistics),
                   ),
-                  const SizedBox(height: 28),
-                ] else
-                  const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _SummaryMetric(
+                        label: '锻炼 / 休息 / 循环',
+                        value:
+                            '${widget.summary.workSeconds} / ${widget.summary.restSeconds} / ${widget.summary.cycles}',
+                      ),
+                      const SizedBox(width: 48),
+                      _SummaryMetric(label: '总时间', value: _formatDuration(widget.summary.totalSeconds)),
+                    ],
+                  ),
+                  if (widget.showStatistics && widget.summary.hasStatistics) ...<Widget>[
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 36,
+                      runSpacing: 16,
+                      alignment: WrapAlignment.center,
+                      children: _buildStatisticsMetrics(widget.summary.statistics),
+                    ),
+                    const SizedBox(height: 28),
+                  ] else
+                    const SizedBox(height: 28),
+                  SizedBox(
                     width: 360,
                     child: Row(
                       children: <Widget>[
@@ -145,10 +123,7 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                                 side: const BorderSide(color: Color(0xFF2D76F8)),
                                 shape: const StadiumBorder(),
                               ),
-                              child: const Text(
-                                '直接退出',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                              ),
+                              child: const Text('直接退出', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ),
@@ -173,8 +148,8 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

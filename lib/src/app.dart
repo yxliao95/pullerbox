@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'view/record/history_page.dart';
-import 'view/trainer/main/training_plan_page.dart';
+import 'views/record/history_page.dart';
+import 'views/trainer/main/training_plan_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

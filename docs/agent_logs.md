@@ -228,3 +228,16 @@
 - 自由训练竖屏实时面板移除指标与数值之间的固定间隔。
 - 记录页同时展示自由训练与计时训练记录，并支持各自删除。
 - 自由训练记录卡片支持点击进入详情页查看指标。
+
+## [v0.0.2] 2026.01.21 - now
+
+- 重写 AGENT.md 设计规范草案- 重构目录为 `lib/src/views` 与 `lib/src/providers`，训练计划与监控页面调整为 Page/View/Widget 分层，影响训练计划页、监控页、记录页。
+- 训练监控逻辑迁移到 `TrainingMonitorController` + `TrainingMonitorState`，页面仅保留渲染与交互分发，影响训练监控流程与数据保存入口。
+- 拆分超长文件：监控页头部/图表绘制/自由训练面板与计划选择弹窗拆分为独立组件，训练统计计算器拆出辅助文件。
+- 数据结构变化：`ChartSample` 与 `TrainingSummary` 移入 models；无持久化字段变更，历史数据无需迁移。
+- 更新规范：移除“任一 Dart 文件超过 250 行必须拆分（除非是纯模型/纯配置）”限制。
+- 合并 training_monitor_controller 的分拆文件，集中到 `lib/src/providers/training_monitor_controller.dart`，并移除对应 part 文件，便于排查错误。
+- 修复 TrainingMonitorController 的 Riverpod 3 API 使用方式，改为 Notifier + autoDispose family，并移除未使用的自由训练计数字段。
+- 修复监控相关视图中 ValueListenable 未识别问题，补充 foundation 导入（监控视图/图表/自由训练相关组件）。
+- 补充规范：使用 `ValueListenable/ValueListenableBuilder` 时需显式引入 `package:flutter/foundation.dart`，避免类型未识别。
+- 修复监控图表绘制文件尾部多余括号导致的语法错误，并补充统计模型导入以消除 TrainingStatistics 未识别报错。

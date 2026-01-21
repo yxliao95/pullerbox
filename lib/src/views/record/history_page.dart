@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../provider/free_training_record_provider.dart';
-import '../../provider/training_record_provider.dart';
+import '../../providers/free_training_record_provider.dart';
+import '../../providers/training_record_provider.dart';
 import 'free_training_record_detail_page.dart';
 import 'training_record_detail_page.dart';
 import 'widgets/free_training_record_card.dart';

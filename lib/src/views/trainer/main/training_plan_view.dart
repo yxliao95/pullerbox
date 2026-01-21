@@ -1,47 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/training_plan.dart';
-import '../../../provider/training_plan_provider.dart';
+import '../../../providers/training_plan_controller.dart';
+import '../../../providers/training_plan_library_controller.dart';
 import '../monitor/training_monitor_page.dart';
-import 'widgets/plan_selector_dialog.dart';
 import 'widgets/training_plan_form.dart';
 import 'widgets/training_plan_header.dart';
 
-class TimerPage extends ConsumerStatefulWidget {
-  const TimerPage({super.key});
+class TrainingPlanView extends StatelessWidget {
+  const TrainingPlanView({
+    required this.state,
+    required this.libraryState,
+    required this.controller,
+    required this.libraryController,
+    required this.nameController,
+    required this.isDeviceConnected,
+    required this.onToggleDeviceConnection,
+    required this.onShowPlanSelector,
+    required this.onStartTraining,
+    super.key,
+  });
 
-  @override
-  ConsumerState<TimerPage> createState() => _TimerPageState();
-}
-
-class _TimerPageState extends ConsumerState<TimerPage> {
-  late final TextEditingController _nameController;
-  bool _isDeviceConnected = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final state = ref.read(trainingPlanProvider);
-    _nameController = TextEditingController(text: state.name);
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
+  final TrainingPlanState state;
+  final TrainingPlanLibraryState libraryState;
+  final TrainingPlanController controller;
+  final TrainingPlanLibraryController libraryController;
+  final TextEditingController nameController;
+  final bool isDeviceConnected;
+  final VoidCallback onToggleDeviceConnection;
+  final VoidCallback onShowPlanSelector;
+  final VoidCallback onStartTraining;
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<TrainingPlanState>(trainingPlanProvider, (previous, next) {
-      ref.read(trainingPlanLibraryProvider.notifier).updateSelectedPlan(next);
-    });
-    final libraryState = ref.watch(trainingPlanLibraryProvider);
-    final libraryController = ref.read(trainingPlanLibraryProvider.notifier);
-    final state = ref.watch(trainingPlanProvider);
-    final controller = ref.read(trainingPlanProvider.notifier);
     final totalDurationText = _formatDuration(state.totalDurationSeconds);
     final isFreeTraining = libraryState.isFreeTraining;
     const sliverAppBarExpandedHeight = 210.0;
@@ -50,12 +42,12 @@ class _TimerPageState extends ConsumerState<TimerPage> {
     const sliverHeaderExpandedPadding = EdgeInsets.fromLTRB(16, 12, 16, 18);
     const bottomFloatButtonHeight = 52.0;
     const bottomFloatHintHeight = 18.0;
-    final showDeviceHint = isFreeTraining && !_isDeviceConnected;
+    final showDeviceHint = isFreeTraining && !isDeviceConnected;
     final bottomFloatAreaHeight = bottomFloatButtonHeight + (showDeviceHint ? bottomFloatHintHeight : 0);
 
-    if (_nameController.text != state.name) {
-      _nameController.text = state.name;
-      _nameController.selection = TextSelection.fromPosition(TextPosition(offset: _nameController.text.length));
+    if (nameController.text != state.name) {
+      nameController.text = state.name;
+      nameController.selection = TextSelection.fromPosition(TextPosition(offset: nameController.text.length));
     }
 
     return Scaffold(
@@ -77,15 +69,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
               child: SizedBox(
                 width: double.infinity,
                 child: FloatingActionButton.extended(
-                  onPressed: showDeviceHint
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<Widget>(
-                              builder: (_) => TrainingMonitorPage(isDeviceConnected: _isDeviceConnected),
-                            ),
-                          );
-                        },
+                  onPressed: showDeviceHint ? null : onStartTraining,
                   backgroundColor: showDeviceHint ? const Color(0xFFBDBDBD) : const Color(0xFF2A73F1),
                   foregroundColor: Colors.white,
                   shape: const StadiumBorder(),
@@ -124,18 +108,18 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                         ? TrainingPlanCollapsedHeader(
                             title: isFreeTraining ? '自由训练' : '总时长',
                             duration: totalDurationText,
-                            onConnectPressed: _toggleDeviceConnection,
+                            onConnectPressed: onToggleDeviceConnection,
                             isFreeTraining: isFreeTraining,
-                            isDeviceConnected: _isDeviceConnected,
+                            isDeviceConnected: isDeviceConnected,
                           )
                         : null,
                     background: TrainingPlanExpandedHeader(
                       title: isFreeTraining ? '自由训练' : '总时长',
                       duration: totalDurationText,
-                      onConnectPressed: _toggleDeviceConnection,
+                      onConnectPressed: onToggleDeviceConnection,
                       expandedPadding: sliverHeaderExpandedPadding,
                       isFreeTraining: isFreeTraining,
-                      isDeviceConnected: _isDeviceConnected,
+                      isDeviceConnected: isDeviceConnected,
                     ),
                   );
                 },
@@ -176,7 +160,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       const SizedBox(height: 16),
-                      PlanNameRow(controller: _nameController, onNameChanged: controller.updateName),
+                      PlanNameRow(controller: nameController, onNameChanged: controller.updateName),
                       const SizedBox(height: 12),
                       NumberCard(
                         label: '锻炼',
@@ -220,7 +204,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => _showPlanSelector(context),
+                              onPressed: onShowPlanSelector,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF2E2E2E),
                                 backgroundColor: Colors.white,
@@ -244,46 +228,18 @@ class _TimerPageState extends ConsumerState<TimerPage> {
       ),
     );
   }
+}
 
+String _formatDuration(int seconds) {
+  final minutes = seconds ~/ 60;
+  final remainSeconds = seconds % 60;
+  final minuteText = minutes.toString().padLeft(2, '0');
+  final secondText = remainSeconds.toString().padLeft(2, '0');
+  return '$minuteText:$secondText';
+}
 
-  Future<void> _showPlanSelector(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      builder: (context) => const PlanSelectorDialog(),
-    );
-    if (!mounted) {
-      return;
-    }
-    final libraryState = ref.read(trainingPlanLibraryProvider);
-    final selectedPlanId = libraryState.selectedPlanId;
-    if (selectedPlanId != null) {
-      TrainingPlanState? selectedPlan;
-      for (final plan in libraryState.plans) {
-        if (plan.id == selectedPlanId) {
-          selectedPlan = plan.plan;
-          break;
-        }
-      }
-      if (selectedPlan != null) {
-        ref.read(trainingPlanProvider.notifier).applyPlan(selectedPlan);
-      }
-    }
-    ref.read(trainingPlanLibraryProvider.notifier).exitEditing();
-  }
-
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainSeconds = seconds % 60;
-    final minuteText = minutes.toString().padLeft(2, '0');
-    final secondText = remainSeconds.toString().padLeft(2, '0');
-    return '$minuteText:$secondText';
-  }
-
-  void _toggleDeviceConnection() {
-    setState(() {
-      _isDeviceConnected = !_isDeviceConnected;
-    });
-  }
+Route<Widget> buildTrainingMonitorRoute(bool isDeviceConnected) {
+  return MaterialPageRoute<Widget>(
+    builder: (_) => TrainingMonitorPage(isDeviceConnected: isDeviceConnected),
+  );
 }

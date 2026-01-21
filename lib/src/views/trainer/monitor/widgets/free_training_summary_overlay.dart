@@ -97,37 +97,37 @@ class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay>
             ),
           ),
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                SizedBox(
-                  width: 260,
-                  child: TextFormField(
-                    controller: _titleController,
-                    textAlign: TextAlign.center,
-                    decoration: const InputDecoration(labelText: '自定义标题', isDense: true),
-                    onChanged: (_) => setState(() {}),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  SizedBox(
+                    width: 260,
+                    child: TextFormField(
+                      controller: _titleController,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(labelText: '自定义标题', isDense: true),
+                      onChanged: (_) => setState(() {}),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 36,
-                  runSpacing: 16,
-                  alignment: WrapAlignment.center,
-                  children: <Widget>[
-                    _SummaryMetric(label: '最大控制力量', value: _formatKg(widget.controlMaxValue)),
-                    _SummaryMetric(label: '最长连续控制', value: _formatSeconds(widget.longestControlTimeSeconds)),
-                    _SummaryMetric(label: '1s均值', value: _formatKg(widget.currentWindowMeanValue)),
-                    _SummaryMetric(label: '1s变化', value: _formatKg(widget.currentWindowDeltaValue)),
-                    _SummaryMetric(label: '1s最大增长', value: _formatKg(widget.deltaMaxValue)),
-                    _SummaryMetric(label: '1s最大下降', value: _formatKg(widget.deltaMinValue)),
-                    _SummaryMetric(label: '总时长', value: _formatSeconds(widget.totalSeconds)),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
+                  const SizedBox(height: 24),
+                  Wrap(
+                    spacing: 36,
+                    runSpacing: 16,
+                    alignment: WrapAlignment.center,
+                    children: <Widget>[
+                      _SummaryMetric(label: '最大控制力量', value: _formatKg(widget.controlMaxValue)),
+                      _SummaryMetric(label: '最长连续控制', value: _formatSeconds(widget.longestControlTimeSeconds)),
+                      _SummaryMetric(label: '1s均值', value: _formatKg(widget.currentWindowMeanValue)),
+                      _SummaryMetric(label: '1s变化', value: _formatKg(widget.currentWindowDeltaValue)),
+                      _SummaryMetric(label: '1s最大增长', value: _formatKg(widget.deltaMaxValue)),
+                      _SummaryMetric(label: '1s最大下降', value: _formatKg(widget.deltaMinValue)),
+                      _SummaryMetric(label: '总时长', value: _formatSeconds(widget.totalSeconds)),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
                     width: 360,
                     child: Row(
                       children: <Widget>[
@@ -166,8 +166,8 @@ class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay>
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

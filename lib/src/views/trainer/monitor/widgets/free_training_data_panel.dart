@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'free_training_panel_widgets.dart';
+
 class FreeTrainingDataPanel extends StatelessWidget {
   const FreeTrainingDataPanel({
     required this.totalSeconds,
@@ -75,15 +77,15 @@ class FreeTrainingDataPanel extends StatelessWidget {
               Flexible(
                 fit: FlexFit.loose,
                 child: SingleChildScrollView(
-                  child: _PanelGrid(
-                    entries: <_PanelEntry>[
-                      _PanelEntry('最大控制力量', _formatKgNullable(controlMaxValue)),
-                      _PanelEntry('最长连续控制', _formatSecondsNullable(longestControlTimeSeconds)),
-                      _PanelEntry('1s均值', _formatKgNullable(currentWindowMeanValue)),
-                      _PanelEntry('1s变化', _formatKgNullable(currentWindowDeltaValue)),
-                      _PanelEntry('1s最大增长', _formatKgNullable(deltaMaxValue)),
-                      _PanelEntry('1s最大下降', _formatKgNullable(deltaMinValue)),
-                      _PanelEntry('总时长', _formatSeconds(totalSeconds)),
+                  child: PanelGrid(
+                    entries: <PanelEntry>[
+                      PanelEntry('最大控制力量', _formatKgNullable(controlMaxValue)),
+                      PanelEntry('最长连续控制', _formatSecondsNullable(longestControlTimeSeconds)),
+                      PanelEntry('1s均值', _formatKgNullable(currentWindowMeanValue)),
+                      PanelEntry('1s变化', _formatKgNullable(currentWindowDeltaValue)),
+                      PanelEntry('1s最大增长', _formatKgNullable(deltaMaxValue)),
+                      PanelEntry('1s最大下降', _formatKgNullable(deltaMinValue)),
+                      PanelEntry('总时长', _formatSeconds(totalSeconds)),
                     ],
                     isSingleColumn: isLandscape,
                   ),
@@ -151,127 +153,19 @@ class FreeTrainingDataPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _HelpItem(label: '最大控制力量', description: '达到力量峰值 95% 以上区间的中位数。'),
-                _HelpItem(label: '最长连续控制', description: '力量连续不低于最大控制力量 95% 的最长时长。'),
-                _HelpItem(label: '1s均值', description: '最近一个完整 1 秒窗口的平均力量。'),
-                _HelpItem(label: '1s变化', description: '当前 1 秒均值减去上一个 1 秒均值。'),
-                _HelpItem(label: '1s最大上升', description: '所有 1 秒变化中的最大上升值。'),
-                _HelpItem(label: '1s最大下降', description: '所有 1 秒变化中的最大下降值。'),
-                _HelpItem(label: '总时长', description: '本次自由训练累计时长。'),
+                FreeTrainingHelpItem(label: '最大控制力量', description: '达到力量峰值 95% 以上区间的中位数。'),
+                FreeTrainingHelpItem(label: '最长连续控制', description: '力量连续不低于最大控制力量 95% 的最长时长。'),
+                FreeTrainingHelpItem(label: '1s均值', description: '最近一个完整 1 秒窗口的平均力量。'),
+                FreeTrainingHelpItem(label: '1s变化', description: '当前 1 秒均值减去上一个 1 秒均值。'),
+                FreeTrainingHelpItem(label: '1s最大上升', description: '所有 1 秒变化中的最大上升值。'),
+                FreeTrainingHelpItem(label: '1s最大下降', description: '所有 1 秒变化中的最大下降值。'),
+                FreeTrainingHelpItem(label: '总时长', description: '本次自由训练累计时长。'),
               ],
             ),
           ),
           actions: <Widget>[TextButton(onPressed: Navigator.of(context).pop, child: const Text('知道了'))],
         );
       },
-    );
-  }
-}
-
-class _PanelRow extends StatelessWidget {
-  const _PanelRow({required this.label, required this.value, required this.removeGap});
-
-  final String label;
-  final String value;
-  final bool removeGap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6E6E6E)),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (!removeGap) const SizedBox(width: 30),
-        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-      ],
-    );
-  }
-}
-
-class _PanelEntry {
-  const _PanelEntry(this.label, this.value);
-
-  final String label;
-  final String value;
-}
-
-class _PanelGrid extends StatelessWidget {
-  const _PanelGrid({required this.entries, required this.isSingleColumn});
-
-  final List<_PanelEntry> entries;
-  final bool isSingleColumn;
-
-  @override
-  Widget build(BuildContext context) {
-    if (isSingleColumn) {
-      return _PanelColumn(entries: entries, removeGap: false);
-    }
-    final leftEntries = <_PanelEntry>[];
-    final rightEntries = <_PanelEntry>[];
-    for (var i = 0; i < entries.length; i += 1) {
-      if (i.isEven) {
-        leftEntries.add(entries[i]);
-      } else {
-        rightEntries.add(entries[i]);
-      }
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(child: _PanelColumn(entries: leftEntries, removeGap: true)),
-        const SizedBox(width: 16),
-        Expanded(child: _PanelColumn(entries: rightEntries, removeGap: true)),
-      ],
-    );
-  }
-}
-
-class _PanelColumn extends StatelessWidget {
-  const _PanelColumn({required this.entries, required this.removeGap});
-
-  final List<_PanelEntry> entries;
-  final bool removeGap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        for (var i = 0; i < entries.length; i += 1) ...<Widget>[
-          if (i > 0) const SizedBox(height: 10),
-          _PanelRow(label: entries[i].label, value: entries[i].value, removeGap: removeGap),
-        ],
-      ],
-    );
-  }
-}
-
-class _HelpItem extends StatelessWidget {
-  const _HelpItem({required this.label, required this.description});
-
-  final String label;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
-          children: <TextSpan>[
-            TextSpan(
-              text: '$label：',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            TextSpan(text: description),
-          ],
-        ),
-      ),
     );
   }
 }
