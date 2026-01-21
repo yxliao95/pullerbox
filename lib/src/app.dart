@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'view/history_page.dart';
-import 'view/training/training_plan_page.dart';
+import 'view/record/history_page.dart';
+import 'view/trainer/main/training_plan_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,7 +27,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _currentIndex = 0;
 
-  static const List<Widget> _pages = <Widget>[TrainingPlanPage(), HistoryPage()];
+  static const List<Widget> _pages = <Widget>[TimerPage(), HistoryPage()];
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +37,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         currentIndex: _currentIndex,
         onTap: (int index) => setState(() => _currentIndex = index),
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.fitness_center), label: '计时训练'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: '历史记录'),
+          BottomNavigationBarItem(icon: Icon(Icons.timer), label: '训练'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: '记录'),
         ],
       ),
     );
