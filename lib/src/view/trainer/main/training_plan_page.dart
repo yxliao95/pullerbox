@@ -49,6 +49,9 @@ class _TimerPageState extends ConsumerState<TimerPage> {
     const sliverAppBarTitlePadding = EdgeInsets.fromLTRB(16, 0, 16, 12);
     const sliverHeaderExpandedPadding = EdgeInsets.fromLTRB(16, 12, 16, 18);
     const bottomFloatButtonHeight = 52.0;
+    const bottomFloatHintHeight = 18.0;
+    final showDeviceHint = isFreeTraining && !_isDeviceConnected;
+    final bottomFloatAreaHeight = bottomFloatButtonHeight + (showDeviceHint ? bottomFloatHintHeight : 0);
 
     if (_nameController.text != state.name) {
       _nameController.text = state.name;
@@ -60,20 +63,37 @@ class _TimerPageState extends ConsumerState<TimerPage> {
       extendBodyBehindAppBar: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: SizedBox(
-        height: bottomFloatButtonHeight,
+        height: bottomFloatAreaHeight,
         width: MediaQuery.of(context).size.width - 32,
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<Widget>(
-                builder: (_) => TrainingMonitorPage(isDeviceConnected: _isDeviceConnected),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (showDeviceHint)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Text('请连接设备', style: TextStyle(fontSize: 12, color: Colors.black45)),
               ),
-            );
-          },
-          backgroundColor: const Color(0xFF2A73F1),
-          foregroundColor: Colors.white,
-          shape: const StadiumBorder(),
-          label: const Text('开始', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: SizedBox(
+                width: double.infinity,
+                child: FloatingActionButton.extended(
+                  onPressed: showDeviceHint
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<Widget>(
+                              builder: (_) => TrainingMonitorPage(isDeviceConnected: _isDeviceConnected),
+                            ),
+                          );
+                        },
+                  backgroundColor: showDeviceHint ? const Color(0xFFBDBDBD) : const Color(0xFF2A73F1),
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                  label: const Text('开始', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -143,7 +163,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(height: bottomFloatButtonHeight + 16),
+                      SizedBox(height: bottomFloatAreaHeight + 16),
                     ],
                   ),
                 ),
@@ -214,7 +234,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(height: bottomFloatButtonHeight + 16),
+                      SizedBox(height: bottomFloatAreaHeight + 16),
                     ],
                   ),
                 ),
@@ -224,6 +244,7 @@ class _TimerPageState extends ConsumerState<TimerPage> {
       ),
     );
   }
+
 
   Future<void> _showPlanSelector(BuildContext context) async {
     await showDialog<void>(

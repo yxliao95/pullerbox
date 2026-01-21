@@ -6,8 +6,10 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/free_training_record.dart';
 import '../../../models/training_plan.dart';
 import '../../../models/training_record.dart';
+import '../../../provider/free_training_record_provider.dart';
 import '../../../provider/training_plan_provider.dart';
 import '../../../provider/training_record_provider.dart';
 import '../../../provider/training_statistics_provider.dart';
@@ -16,6 +18,8 @@ import 'widgets/monitor_chart.dart';
 import 'widgets/monitor_progress_bar.dart';
 import 'widgets/monitor_summary_overlay.dart';
 import 'widgets/monitor_toolbar.dart';
+import 'widgets/free_training_data_panel.dart';
+import 'widgets/free_training_summary_overlay.dart';
 
 class TrainingMonitorPage extends ConsumerStatefulWidget {
   const TrainingMonitorPage({required this.isDeviceConnected, super.key});
@@ -35,6 +39,11 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   static const double _estimatedToolbarWidth = 136.0;
   static const double _defaultChartMaxValue = 10.0;
   static const double _chartMaxTweenSpeed = 6.0;
+  static const double _freeTrainingWindowSeconds = 10.0;
+  static const double _freeTrainingMetricsWindowSeconds = 1.0;
+  static const double _freeTrainingQuantile = 0.99;
+  static const double _freeTrainingControlRatio = 0.95;
+  late final int _freeTrainingMetricsWindowSampleCount;
   final math.Random _random = math.Random();
   final ValueNotifier<double> _displayTime = ValueNotifier<double>(0.0);
 
@@ -48,6 +57,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   bool _isFinishPending = false;
   bool _isSummaryVisible = false;
   bool _recordSaved = false;
+  bool _isFreeTraining = false;
   int _currentCycle = 1;
   double _elapsedInPhase = 0.0;
   double _currentValue = 0.0;
@@ -87,18 +97,44 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   TrainingSummary? _summary;
   double _toolbarHorizontalWidth = 0.0;
   double _exitButtonHeight = 0.0;
+  double _freeTrainingPanelWidth = 160.0;
   double _workElapsedSeconds = 0.0;
   double _activeElapsedSeconds = 0.0;
   DateTime _trainingStartedAt = DateTime.now();
+  double _freeTrainingElapsedSeconds = 0.0;
+  double _freeTrainingWindowStart = 0.0;
+  double _freeTrainingValueSum = 0.0;
+  double _freeTrainingMaxValue = 0.0;
+  int _freeTrainingSampleCount = 0;
+  String _freeTrainingTitle = '自由训练';
+  double _freeTrainingBaseValue = 0.0;
+  double _freeTrainingNextBaseTime = 0.0;
+  List<double> _freeTrainingAllSamples = <double>[];
+  List<double> _freeTrainingWindowBuffer = <double>[];
+  List<double> _freeTrainingWindowMeans = <double>[];
+  List<double> _freeTrainingWindowDeltas = <double>[];
+  double? _freeTrainingControlMaxValue;
+  double? _freeTrainingLongestControlTimeSeconds;
+  double? _freeTrainingCurrentWindowMeanValue;
+  double? _freeTrainingCurrentWindowDeltaValue;
+  double? _freeTrainingDeltaMaxValue;
+  double? _freeTrainingDeltaMinValue;
 
   @override
   void initState() {
     super.initState();
+    _freeTrainingTitle = '自由训练';
+    _freeTrainingMetricsWindowSampleCount = (_freeTrainingMetricsWindowSeconds / _sampleIntervalSeconds).round();
+    _isFreeTraining = ref.read(trainingPlanLibraryProvider).isFreeTraining;
     SystemChrome.setPreferredOrientations(<DeviceOrientation>[
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _startPreparePhase();
+    if (_isFreeTraining) {
+      _startFreeTraining();
+    } else {
+      _startPreparePhase();
+    }
     _ticker = createTicker(_onFrame)..start();
     _timer = Timer.periodic(Duration(milliseconds: (_sampleIntervalSeconds * 1000).round()), (_) => _tick());
   }
@@ -130,7 +166,10 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
       return;
     }
     final lagSeconds = _isFinishPending ? 0.0 : _renderLagSeconds;
-    final targetTime = (_elapsedInPhase - lagSeconds).clamp(0.0, _elapsedInPhase);
+    final rawTargetTime = (_elapsedInPhase - lagSeconds).clamp(0.0, double.infinity);
+    final targetTime = _isFreeTraining
+        ? math.min(rawTargetTime, _freeTrainingWindowSeconds)
+        : rawTargetTime.clamp(0.0, _elapsedInPhase);
     final nextDisplayTime = math.min(_displayTime.value + deltaSeconds, targetTime);
     if (nextDisplayTime != _displayTime.value) {
       _displayTime.value = nextDisplayTime;
@@ -153,6 +192,10 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   }
 
   void _tick() {
+    if (_isFreeTraining) {
+      _tickFreeTraining();
+      return;
+    }
     if (_isPaused || _isFinishPending || _isSummaryVisible) {
       return;
     }
@@ -197,6 +240,53 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
 
     if (_elapsedInPhase >= phaseDuration) {
       _advancePhase(plan);
+    }
+    setState(() {});
+  }
+
+  void _tickFreeTraining() {
+    if (_isPaused || _isSummaryVisible) {
+      return;
+    }
+    final isOfflineMode = !widget.isDeviceConnected;
+    _elapsedInPhase += _sampleIntervalSeconds;
+    _freeTrainingElapsedSeconds += _sampleIntervalSeconds;
+
+    if (!isOfflineMode) {
+      final rawValue = _nextFreeTrainingSampleValue();
+      _smoothedValue = _emaAlpha * rawValue + (1 - _emaAlpha) * _smoothedValue;
+      _currentValue = _smoothedValue;
+      _freeTrainingSampleCount += 1;
+      _freeTrainingValueSum += _currentValue;
+      if (_currentValue > _freeTrainingMaxValue) {
+        _freeTrainingMaxValue = _currentValue;
+      }
+      _updateFreeTrainingMetrics(_currentValue);
+
+      final windowStart = math.max(0.0, _freeTrainingElapsedSeconds - _freeTrainingWindowSeconds);
+      final windowShift = windowStart - _freeTrainingWindowStart;
+      if (windowShift > 0) {
+        _samples = _samples
+            .map((sample) => ChartSample(time: sample.time - windowShift, value: sample.value))
+            .where((sample) => sample.time >= 0)
+            .toList();
+        _freeTrainingWindowStart = windowStart;
+      }
+      _samples = <ChartSample>[
+        ..._samples,
+        ChartSample(time: _freeTrainingElapsedSeconds - windowStart, value: _currentValue),
+      ];
+      if (_samples.length > 300) {
+        _samples = _samples.sublist(_samples.length - 300);
+      }
+      if (_currentValue > _chartMaxValue) {
+        _chartMaxValue = _roundToTenth(_currentValue);
+        if (_chartMaxAnimatedValue <= 0) {
+          _chartMaxAnimatedValue = _chartMaxValue;
+        }
+        _chartMaxLocked = true;
+        _chartMaxReachTime = _displayTime.value;
+      }
     }
     setState(() {});
   }
@@ -290,6 +380,44 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     _prepareSessionSimulation(totalCycles: totalCycles);
   }
 
+  void _startFreeTraining() {
+    _isPreparing = false;
+    _isWorking = true;
+    _elapsedInPhase = 0.0;
+    _samples = const <ChartSample>[ChartSample(time: 0.0, value: 0.0)];
+    _displayTime.value = 0.0;
+    _lastFrameTimestamp = Duration.zero;
+    _currentValue = 0.0;
+    _smoothedValue = 0.0;
+    _simulatedValue = 0.0;
+    _workValues = <double>[];
+    _groupedWorkSamples = <TrainingSampleGroup>[];
+    _summary = null;
+    _pendingGroupedSamples = null;
+    _isFinishPending = false;
+    _isSummaryVisible = false;
+    _recordSaved = false;
+    _workElapsedSeconds = 0.0;
+    _activeElapsedSeconds = 0.0;
+    _trainingStartedAt = DateTime.now();
+    _chartMaxValue = _defaultChartMaxValue;
+    _chartMaxAnimatedValue = _chartMaxValue;
+    _chartMaxLocked = true;
+    _chartMaxReachTime = 0.0;
+    _chartMaxFrozen = false;
+    _freeTrainingElapsedSeconds = 0.0;
+    _freeTrainingWindowStart = 0.0;
+    _freeTrainingValueSum = 0.0;
+    _freeTrainingMaxValue = 0.0;
+    _freeTrainingSampleCount = 0;
+    _freeTrainingTitle = '自由训练';
+    _freeTrainingBaseValue = 0.0;
+    _freeTrainingNextBaseTime = 0.0;
+    _resetFreeTrainingMetrics();
+    _prepareSessionSimulation(totalCycles: 1);
+    _prepareWorkSimulation(phaseDurationSeconds: _freeTrainingWindowSeconds);
+  }
+
   double _nextSampleValue() {
     if (_isPreparing || !_isWorking) {
       final value = _randomInRange(0.0, _idleMaxValue);
@@ -299,6 +427,38 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final value = _fatigueModeActive ? _nextFatigueValue() : _nextWorkingValue();
     _simulatedValue = value;
     return _roundToTenth(value);
+  }
+
+  double _nextFreeTrainingSampleValue() {
+    const baseMin = 10.0;
+    const baseMax = 60.0;
+    const baseIntervalSeconds = 5.0;
+    if (_freeTrainingBaseValue <= 0) {
+      _freeTrainingBaseValue = _randomInRange(baseMin, baseMax);
+      _freeTrainingNextBaseTime = baseIntervalSeconds;
+      _simulatedValue = _freeTrainingBaseValue;
+    }
+    while (_freeTrainingElapsedSeconds >= _freeTrainingNextBaseTime) {
+      _freeTrainingBaseValue = _randomInRange(baseMin, baseMax);
+      _freeTrainingNextBaseTime += baseIntervalSeconds;
+    }
+    if (_freeTrainingNextBaseTime <= _freeTrainingElapsedSeconds) {
+      _freeTrainingNextBaseTime = _freeTrainingElapsedSeconds + baseIntervalSeconds;
+    }
+    final rangeMin = _freeTrainingBaseValue * 0.8;
+    final rangeMax = _freeTrainingBaseValue * 1.2;
+    final targetValue = _randomInRange(rangeMin, rangeMax);
+    final previousValue = _simulatedValue > 0 ? _simulatedValue : _freeTrainingBaseValue;
+    final maxStep = previousValue * 0.05;
+    double nextValue;
+    if ((targetValue - previousValue).abs() <= maxStep) {
+      nextValue = targetValue;
+    } else {
+      nextValue = previousValue + (targetValue > previousValue ? maxStep : -maxStep);
+    }
+    nextValue = nextValue.clamp(rangeMin, rangeMax);
+    _simulatedValue = nextValue;
+    return _roundToTenth(nextValue);
   }
 
   double _randomInRange(double min, double max) {
@@ -490,6 +650,140 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     }
   }
 
+  void _resetFreeTraining() {
+    setState(() {
+      _elapsedInPhase = 0.0;
+      _displayTime.value = 0.0;
+      _lastFrameTimestamp = Duration.zero;
+      _currentValue = 0.0;
+      _smoothedValue = 0.0;
+      _simulatedValue = 0.0;
+      _samples = const <ChartSample>[ChartSample(time: 0.0, value: 0.0)];
+      _freeTrainingElapsedSeconds = 0.0;
+      _freeTrainingWindowStart = 0.0;
+      _freeTrainingValueSum = 0.0;
+      _freeTrainingMaxValue = 0.0;
+      _freeTrainingSampleCount = 0;
+      _freeTrainingTitle = '自由训练';
+      _freeTrainingBaseValue = 0.0;
+      _freeTrainingNextBaseTime = 0.0;
+      _resetFreeTrainingMetrics();
+      _chartMaxValue = _defaultChartMaxValue;
+      _chartMaxAnimatedValue = _chartMaxValue;
+      _chartMaxLocked = true;
+      _chartMaxReachTime = 0.0;
+      _prepareWorkSimulation(phaseDurationSeconds: _freeTrainingWindowSeconds);
+    });
+  }
+
+  void _resetFreeTrainingMetrics() {
+    _freeTrainingAllSamples = <double>[];
+    _freeTrainingWindowBuffer = <double>[];
+    _freeTrainingWindowMeans = <double>[];
+    _freeTrainingWindowDeltas = <double>[];
+    _freeTrainingControlMaxValue = null;
+    _freeTrainingLongestControlTimeSeconds = null;
+    _freeTrainingCurrentWindowMeanValue = null;
+    _freeTrainingCurrentWindowDeltaValue = null;
+    _freeTrainingDeltaMaxValue = null;
+    _freeTrainingDeltaMinValue = null;
+  }
+
+  void _updateFreeTrainingMetrics(double value) {
+    _freeTrainingAllSamples.add(value);
+    _freeTrainingWindowBuffer.add(value);
+    if (_freeTrainingWindowBuffer.length < _freeTrainingMetricsWindowSampleCount) {
+      return;
+    }
+    final windowSum = _freeTrainingWindowBuffer.fold<double>(0.0, (sum, item) => sum + item);
+    final windowMean = windowSum / _freeTrainingWindowBuffer.length;
+    _freeTrainingWindowMeans.add(windowMean);
+    _freeTrainingCurrentWindowMeanValue = windowMean;
+    if (_freeTrainingWindowMeans.length > 1) {
+      final previousMean = _freeTrainingWindowMeans[_freeTrainingWindowMeans.length - 2];
+      final delta = windowMean - previousMean;
+      _freeTrainingWindowDeltas.add(delta);
+      _freeTrainingCurrentWindowDeltaValue = delta;
+    }
+    _freeTrainingWindowBuffer.clear();
+    _recalculateFreeTrainingMetrics();
+  }
+
+  void _recalculateFreeTrainingMetrics() {
+    if (_freeTrainingAllSamples.isEmpty) {
+      _resetFreeTrainingMetrics();
+      return;
+    }
+    final sortedAllSamples = List<double>.from(_freeTrainingAllSamples)..sort();
+    final robustMaxValue = _quantileSorted(sortedAllSamples, _freeTrainingQuantile);
+    final controlThreshold = robustMaxValue * _freeTrainingControlRatio;
+    final controlSamples = _freeTrainingAllSamples.where((value) => value >= controlThreshold).toList();
+    if (controlSamples.isEmpty) {
+      _freeTrainingControlMaxValue = null;
+      _freeTrainingLongestControlTimeSeconds = null;
+    } else {
+      final sortedControlSamples = List<double>.from(controlSamples)..sort();
+      final controlMax = _medianSorted(sortedControlSamples);
+      _freeTrainingControlMaxValue = controlMax;
+      final controlFloor = controlMax * _freeTrainingControlRatio;
+      final longestControlTimeSeconds = _resolveMaxConsecutiveSeconds(_freeTrainingAllSamples, controlFloor);
+      _freeTrainingLongestControlTimeSeconds = longestControlTimeSeconds;
+    }
+
+    if (_freeTrainingWindowDeltas.isEmpty) {
+      _freeTrainingDeltaMaxValue = null;
+      _freeTrainingDeltaMinValue = null;
+    } else {
+      final sortedDeltas = List<double>.from(_freeTrainingWindowDeltas)..sort();
+      _freeTrainingDeltaMaxValue = sortedDeltas.last;
+      _freeTrainingDeltaMinValue = sortedDeltas.first;
+    }
+  }
+
+  double _medianSorted(List<double> sortedValues) {
+    final count = sortedValues.length;
+    if (count == 0) {
+      return 0.0;
+    }
+    final mid = count ~/ 2;
+    if (count.isOdd) {
+      return sortedValues[mid];
+    }
+    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+  }
+
+  double _quantileSorted(List<double> sortedValues, double quantile) {
+    if (sortedValues.isEmpty) {
+      return 0.0;
+    }
+    final position = (sortedValues.length - 1) * quantile;
+    final lowerIndex = position.floor();
+    final upperIndex = position.ceil();
+    if (lowerIndex == upperIndex) {
+      return sortedValues[lowerIndex];
+    }
+    final lower = sortedValues[lowerIndex];
+    final upper = sortedValues[upperIndex];
+    final weight = position - lowerIndex;
+    return lower + (upper - lower) * weight;
+  }
+
+  double _resolveMaxConsecutiveSeconds(List<double> samples, double threshold) {
+    var longest = 0;
+    var current = 0;
+    for (final value in samples) {
+      if (value >= threshold) {
+        current += 1;
+        if (current > longest) {
+          longest = current;
+        }
+      } else {
+        current = 0;
+      }
+    }
+    return longest * _sampleIntervalSeconds;
+  }
+
   void _toggleSound() {
     setState(() {
       _isSoundOn = !_isSoundOn;
@@ -520,6 +814,9 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
 
   @override
   Widget build(BuildContext context) {
+    if (_isFreeTraining) {
+      return _buildFreeTraining(context);
+    }
     final plan = ref.watch(trainingPlanProvider);
     final totalCycles = math.max(1, plan.cycles);
     final phaseDuration = _isPreparing ? _prepareSeconds : (_isWorking ? plan.workSeconds : plan.restSeconds);
@@ -552,6 +849,7 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
                               isMaxLineLocked: _chartMaxLocked,
                               maxLineLockTime: _chartMaxReachTime,
                               phaseDuration: phaseDuration.toDouble(),
+                              rightInset: 8.0,
                             ),
                           ),
                         ),
@@ -754,6 +1052,170 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     );
   }
 
+  Widget _buildFreeTraining(BuildContext context) {
+    const workColor = Color(0xFF2AC41F);
+    const fallbackPanelWidth = 160.0;
+    const panelPadding = 16.0;
+    const chartRightPadding = 16.0;
+    final isOfflineMode = !widget.isDeviceConnected;
+    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    final panelWidth = _freeTrainingPanelWidth > 0 ? _freeTrainingPanelWidth : fallbackPanelWidth;
+    final rightInset = (isPortrait ? 0.0 : panelWidth + panelPadding) + chartRightPadding;
+    final chartStack = Stack(
+      children: <Widget>[
+        if (!isOfflineMode)
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: MonitorChartPanel(
+                samples: _samples,
+                displayTimeListenable: _displayTime,
+                isPreparing: false,
+                isWorking: true,
+                targetMaxValue: _chartMaxAnimatedValue,
+                isMaxLineLocked: _chartMaxLocked,
+                maxLineLockTime: _chartMaxReachTime,
+                phaseDuration: _freeTrainingWindowSeconds,
+                rightInset: rightInset,
+              ),
+            ),
+          ),
+        if (!isOfflineMode)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Container(
+                width: 110,
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                child: Align(
+                  alignment: Alignment.center,
+                  widthFactor: 1,
+                  heightFactor: 1,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        RichText(
+                          text: TextSpan(
+                            children: <TextSpan>[
+                              TextSpan(
+                                text: _currentValue.toStringAsFixed(1),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black),
+                              ),
+                              TextSpan(
+                                text: ' kg',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_chartMaxValue <= 0 ? 0 : (_currentValue / _chartMaxValue * 100).round()}%',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (isOfflineMode)
+          const Center(
+            child: Text(
+              '自由训练',
+              style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: workColor),
+            ),
+          ),
+        Positioned(top: 8, left: 16, child: _ExitButton(onPressed: _handleExit)),
+      ],
+    );
+    final mainContent = isPortrait
+        ? Column(
+            children: <Widget>[
+              Expanded(child: chartStack),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: FreeTrainingDataPanel(
+                  width: double.infinity,
+                  totalSeconds: _freeTrainingElapsedSeconds,
+                  controlMaxValue: _freeTrainingControlMaxValue,
+                  longestControlTimeSeconds: _freeTrainingLongestControlTimeSeconds,
+                  currentWindowMeanValue: _freeTrainingCurrentWindowMeanValue,
+                  currentWindowDeltaValue: _freeTrainingCurrentWindowDeltaValue,
+                  deltaMaxValue: _freeTrainingDeltaMaxValue,
+                  deltaMinValue: _freeTrainingDeltaMinValue,
+                  isDeviceConnected: widget.isDeviceConnected,
+                  isPaused: _isPaused,
+                  onReset: _resetFreeTraining,
+                  onTogglePause: _togglePause,
+                ),
+              ),
+            ],
+          )
+        : Stack(
+            children: <Widget>[
+              Positioned.fill(child: chartStack),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: panelPadding),
+                  child: MeasureSize(
+                    onChange: (size) {
+                      if (size.width != _freeTrainingPanelWidth) {
+                        setState(() {
+                          _freeTrainingPanelWidth = size.width;
+                        });
+                      }
+                    },
+                    child: FreeTrainingDataPanel(
+                      totalSeconds: _freeTrainingElapsedSeconds,
+                      controlMaxValue: _freeTrainingControlMaxValue,
+                      longestControlTimeSeconds: _freeTrainingLongestControlTimeSeconds,
+                      currentWindowMeanValue: _freeTrainingCurrentWindowMeanValue,
+                      currentWindowDeltaValue: _freeTrainingCurrentWindowDeltaValue,
+                      deltaMaxValue: _freeTrainingDeltaMaxValue,
+                      deltaMinValue: _freeTrainingDeltaMinValue,
+                      isDeviceConnected: widget.isDeviceConnected,
+                      isPaused: _isPaused,
+                      onReset: _resetFreeTraining,
+                      onTogglePause: _togglePause,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F2),
+      body: SafeArea(
+        child: Stack(
+          children: <Widget>[
+            mainContent,
+            if (_isSummaryVisible)
+              Positioned.fill(
+                child: FreeTrainingSummaryOverlay(
+                  defaultTitle: _freeTrainingTitle,
+                  totalSeconds: _freeTrainingElapsedSeconds,
+                  controlMaxValue: _freeTrainingControlMaxValue,
+                  longestControlTimeSeconds: _freeTrainingLongestControlTimeSeconds,
+                  currentWindowMeanValue: _freeTrainingCurrentWindowMeanValue,
+                  currentWindowDeltaValue: _freeTrainingCurrentWindowDeltaValue,
+                  deltaMaxValue: _freeTrainingDeltaMaxValue,
+                  deltaMinValue: _freeTrainingDeltaMinValue,
+                  onExitWithoutSave: _exitWithoutSave,
+                  onSaveAndExit: _saveFreeTrainingAndExit,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   TrainingSummary _buildSummary(
     TrainingPlanState plan,
     List<TrainingSampleGroup> groupedSamples, {
@@ -812,6 +1274,16 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
   }
 
   void _handleExit() {
+    if (_isFreeTraining) {
+      if (_isSummaryVisible) {
+        _exitWithoutSave();
+        return;
+      }
+      setState(() {
+        _isSummaryVisible = true;
+      });
+      return;
+    }
     if (_isSummaryVisible) {
       _exitWithoutSave();
       return;
@@ -856,6 +1328,23 @@ class _TrainingMonitorPageState extends ConsumerState<TrainingMonitorPage> with 
     final plan = ref.read(trainingPlanProvider);
     final groupedSamples = _pendingGroupedSamples ?? _groupedWorkSamples;
     _saveTrainingRecord(plan, _summary!, groupedSamples: groupedSamples);
+    Navigator.of(context).maybePop();
+  }
+
+  void _saveFreeTrainingAndExit(String title) {
+    final record = FreeTrainingRecord(
+      id: _trainingStartedAt.microsecondsSinceEpoch.toString(),
+      title: title,
+      totalSeconds: _freeTrainingElapsedSeconds,
+      startedAt: _trainingStartedAt,
+      controlMaxValue: _freeTrainingControlMaxValue,
+      longestControlTimeSeconds: _freeTrainingLongestControlTimeSeconds,
+      currentWindowMeanValue: _freeTrainingCurrentWindowMeanValue,
+      currentWindowDeltaValue: _freeTrainingCurrentWindowDeltaValue,
+      deltaMaxValue: _freeTrainingDeltaMaxValue,
+      deltaMinValue: _freeTrainingDeltaMinValue,
+    );
+    ref.read(freeTrainingRecordProvider.notifier).addRecord(record);
     Navigator.of(context).maybePop();
   }
 }

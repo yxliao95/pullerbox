@@ -1,48 +1,54 @@
 import 'package:flutter/material.dart';
 
-import '../../../../models/training_record.dart';
 import 'measure_size.dart';
 
-class TrainingSummary {
-  const TrainingSummary({
-    required this.planName,
-    required this.workSeconds,
-    required this.restSeconds,
-    required this.cycles,
+class FreeTrainingSummaryOverlay extends StatefulWidget {
+  const FreeTrainingSummaryOverlay({
+    required this.defaultTitle,
     required this.totalSeconds,
-    required this.statistics,
-    required this.hasStatistics,
-  });
-
-  final String planName;
-  final int workSeconds;
-  final int restSeconds;
-  final int cycles;
-  final int totalSeconds;
-  final TrainingStatistics statistics;
-  final bool hasStatistics;
-}
-
-class MonitorSummaryOverlay extends StatefulWidget {
-  const MonitorSummaryOverlay({
-    required this.summary,
-    required this.showStatistics,
+    required this.controlMaxValue,
+    required this.longestControlTimeSeconds,
+    required this.currentWindowMeanValue,
+    required this.currentWindowDeltaValue,
+    required this.deltaMaxValue,
+    required this.deltaMinValue,
     required this.onExitWithoutSave,
     required this.onSaveAndExit,
     super.key,
   });
 
-  final TrainingSummary summary;
-  final bool showStatistics;
+  final String defaultTitle;
+  final double totalSeconds;
+  final double? controlMaxValue;
+  final double? longestControlTimeSeconds;
+  final double? currentWindowMeanValue;
+  final double? currentWindowDeltaValue;
+  final double? deltaMaxValue;
+  final double? deltaMinValue;
   final VoidCallback onExitWithoutSave;
-  final VoidCallback onSaveAndExit;
+  final ValueChanged<String> onSaveAndExit;
 
   @override
-  State<MonitorSummaryOverlay> createState() => _MonitorSummaryOverlayState();
+  State<FreeTrainingSummaryOverlay> createState() => _FreeTrainingSummaryOverlayState();
 }
 
-class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
+class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay> {
+  static const _fallbackTitle = '自由训练';
+  late final TextEditingController _titleController;
   double _exitButtonHeight = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialTitle = widget.defaultTitle.trim().isEmpty ? _fallbackTitle : widget.defaultTitle;
+    _titleController = TextEditingController(text: initialTitle);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,41 +100,31 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    widget.summary.planName,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                SizedBox(
+                  width: 260,
+                  child: TextFormField(
+                    controller: _titleController,
                     textAlign: TextAlign.center,
+                    decoration: const InputDecoration(labelText: '自定义标题', isDense: true),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 36,
+                  runSpacing: 16,
+                  alignment: WrapAlignment.center,
                   children: <Widget>[
-                    _SummaryMetric(
-                      label: '锻炼 / 休息 / 循环',
-                      value:
-                          '${widget.summary.workSeconds} / ${widget.summary.restSeconds} / ${widget.summary.cycles}',
-                    ),
-                    const SizedBox(width: 48),
-                    _SummaryMetric(
-                      label: '总时间',
-                      value: _formatDuration(widget.summary.totalSeconds),
-                    ),
+                    _SummaryMetric(label: '最大控制力量', value: _formatKg(widget.controlMaxValue)),
+                    _SummaryMetric(label: '最长连续控制', value: _formatSeconds(widget.longestControlTimeSeconds)),
+                    _SummaryMetric(label: '1s均值', value: _formatKg(widget.currentWindowMeanValue)),
+                    _SummaryMetric(label: '1s变化', value: _formatKg(widget.currentWindowDeltaValue)),
+                    _SummaryMetric(label: '1s最大增长', value: _formatKg(widget.deltaMaxValue)),
+                    _SummaryMetric(label: '1s最大下降', value: _formatKg(widget.deltaMinValue)),
+                    _SummaryMetric(label: '总时长', value: _formatSeconds(widget.totalSeconds)),
                   ],
                 ),
-                if (widget.showStatistics && widget.summary.hasStatistics) ...<Widget>[
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 36,
-                    runSpacing: 16,
-                    alignment: WrapAlignment.center,
-                    children: _buildStatisticsMetrics(widget.summary.statistics),
-                  ),
-                  const SizedBox(height: 28),
-                ] else
-                  const SizedBox(height: 28),
+                const SizedBox(height: 28),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: SizedBox(
@@ -145,10 +141,7 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                                 side: const BorderSide(color: Color(0xFF2D76F8)),
                                 shape: const StadiumBorder(),
                               ),
-                              child: const Text(
-                                '直接退出',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                              ),
+                              child: const Text('直接退出', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ),
@@ -157,7 +150,7 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                           child: SizedBox(
                             height: 44,
                             child: ElevatedButton(
-                              onPressed: widget.onSaveAndExit,
+                              onPressed: () => widget.onSaveAndExit(_resolveTitle()),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF2D76F8),
                                 shape: const StadiumBorder(),
@@ -182,44 +175,23 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
     );
   }
 
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remaining = seconds % 60;
-    return '${minutes.toString()}:${remaining.toString().padLeft(2, '0')}';
+  String _resolveTitle() {
+    final trimmed = _titleController.text.trim();
+    return trimmed.isEmpty ? _fallbackTitle : trimmed;
   }
 
-  List<Widget> _buildStatisticsMetrics(TrainingStatistics statistics) {
-    final hasFatigue = statistics.fatigueStartCycle > 0;
-    final fatigueLabel = hasFatigue
-        ? '第${statistics.fatigueStartCycle}轮 / ${statistics.fatigueStartTime.toStringAsFixed(1)}s'
-        : '未触发';
-    final minControlLabel = hasFatigue
-        ? (statistics.minControlStrengthMissing ? '缺失' : _formatWeight(statistics.minControlStrength))
-        : '未触发';
-    return <Widget>[
-      _SummaryMetric(label: '最大力量', value: _formatWeight(statistics.maxStrengthSession)),
-      _SummaryMetric(label: '最大控制力量', value: _formatWeight(statistics.maxControlStrengthSession)),
-      _SummaryMetric(label: '控制循环数', value: statistics.controlCycles.toString()),
-      _SummaryMetric(label: '力竭信号', value: fatigueLabel),
-      _SummaryMetric(label: '最低控制力量', value: minControlLabel),
-      _SummaryMetric(label: '降幅均值', value: _formatPercent(statistics.dropMean, hasFatigue)),
-      _SummaryMetric(label: '降幅最大', value: _formatPercent(statistics.dropMax, hasFatigue)),
-      _SummaryMetric(label: '降幅标准差', value: _formatPercent(statistics.dropStd, hasFatigue)),
-    ];
-  }
-
-  String _formatWeight(double value) {
-    if (value.isNaN || value.isInfinite) {
+  String _formatKg(double? value) {
+    if (value == null || value.isNaN || value.isInfinite) {
       return 'N/A';
     }
     return '${value.toStringAsFixed(1)}kg';
   }
 
-  String _formatPercent(double value, bool isAvailable) {
-    if (!isAvailable || value.isNaN || value.isInfinite) {
+  String _formatSeconds(double? value) {
+    if (value == null || value.isNaN || value.isInfinite) {
       return 'N/A';
     }
-    return '${(value * 100).toStringAsFixed(1)}%';
+    return '${value.toStringAsFixed(1)}s';
   }
 }
 
@@ -234,15 +206,9 @@ class _SummaryMetric extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF8E8E8E)),
-        ),
+        Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E8E))),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
-        ),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }

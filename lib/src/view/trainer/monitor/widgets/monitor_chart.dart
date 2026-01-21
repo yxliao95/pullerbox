@@ -20,6 +20,7 @@ class MonitorChartPanel extends StatelessWidget {
     required this.isMaxLineLocked,
     required this.maxLineLockTime,
     required this.phaseDuration,
+    this.rightInset = 0.0,
     super.key,
   });
 
@@ -31,6 +32,7 @@ class MonitorChartPanel extends StatelessWidget {
   final bool isMaxLineLocked;
   final double maxLineLockTime;
   final double phaseDuration;
+  final double rightInset;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,7 @@ class MonitorChartPanel extends StatelessWidget {
         isMaxLineLocked: isMaxLineLocked,
         maxLineLockTime: maxLineLockTime,
         phaseDuration: phaseDuration,
+        rightInset: rightInset,
       ),
     );
   }
@@ -59,6 +62,7 @@ class _ChartPainter extends CustomPainter {
     required this.isMaxLineLocked,
     required this.maxLineLockTime,
     required this.phaseDuration,
+    required this.rightInset,
   }) : super(repaint: displayTimeListenable);
 
   final List<ChartSample> samples;
@@ -69,6 +73,7 @@ class _ChartPainter extends CustomPainter {
   final bool isMaxLineLocked;
   final double maxLineLockTime;
   final double phaseDuration;
+  final double rightInset;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -76,6 +81,7 @@ class _ChartPainter extends CustomPainter {
       return;
     }
     final chartRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final contentWidth = (size.width - rightInset).clamp(0.0, size.width);
     const backgroundColor = Color(0xFFF2F2F2);
     canvas.drawRect(chartRect, Paint()..color = backgroundColor);
     if (samples.isEmpty) {
@@ -91,6 +97,24 @@ class _ChartPainter extends CustomPainter {
     double lastY = 0.0;
     var hasPoint = false;
     ChartSample? previous;
+    final firstSample = samples.first;
+    if (firstSample.time > 0) {
+      final anchorSample = ChartSample(time: 0, value: firstSample.value);
+      _appendPoint(
+        path: path,
+        sample: anchorSample,
+        maxValueOnChart: maxValueOnChart,
+        size: size,
+        hasPointValue: hasPoint,
+        firstX: (value) => firstX = value,
+        firstY: (value) => firstY = value,
+        lastX: (value) => lastX = value,
+        lastY: (value) => lastY = value,
+        hasPoint: (value) => hasPoint = value,
+        contentWidth: contentWidth,
+      );
+      previous = anchorSample;
+    }
     for (final sample in samples) {
       if (sample.time > displayTime) {
         if (previous != null) {
@@ -106,6 +130,7 @@ class _ChartPainter extends CustomPainter {
             lastX: (value) => lastX = value,
             lastY: (value) => lastY = value,
             hasPoint: (value) => hasPoint = value,
+            contentWidth: contentWidth,
           );
         }
         break;
@@ -121,6 +146,7 @@ class _ChartPainter extends CustomPainter {
         lastX: (value) => lastX = value,
         lastY: (value) => lastY = value,
         hasPoint: (value) => hasPoint = value,
+        contentWidth: contentWidth,
       );
       previous = sample;
     }
@@ -152,15 +178,19 @@ class _ChartPainter extends CustomPainter {
     final strokeColor = isPreparing
         ? const Color(0xFF3B7CFF)
         : (isWorking ? const Color(0xFF2AC41F) : const Color(0xFFFF4B4B));
+    double? maxLineY;
+    double? percent60LineY;
+    double? percent20LineY;
     if (targetMaxValue > 0) {
       final linePaint = Paint()
         ..color = const Color(0xFFB0B0B0)
         ..strokeWidth = 1;
-      final maxLineY = size.height - (targetMaxValue / maxValueOnChart) * size.height;
+      maxLineY = size.height - (targetMaxValue / maxValueOnChart) * size.height;
       _drawDottedLine(canvas, linePaint, maxLineY, size.width);
-      _drawMaxLabel(canvas, size, maxLineY, targetMaxValue);
-      _drawPercentLine(canvas, size, maxLineY, 0.6, linePaint);
-      _drawPercentLine(canvas, size, maxLineY, 0.2, linePaint);
+      percent60LineY = _resolvePercentLineY(size, maxLineY, 0.6);
+      percent20LineY = _resolvePercentLineY(size, maxLineY, 0.2);
+      _drawDottedLine(canvas, linePaint, percent60LineY, size.width);
+      _drawDottedLine(canvas, linePaint, percent20LineY, size.width);
     }
     canvas.drawPath(
       path,
@@ -172,6 +202,15 @@ class _ChartPainter extends CustomPainter {
     final endOffset = Offset(lastX, lastY);
     canvas.drawCircle(endOffset, 6, Paint()..color = strokeColor);
     canvas.drawCircle(endOffset, 4, Paint()..color = Colors.white);
+    if (targetMaxValue > 0 && maxLineY != null) {
+      _drawMaxLabel(canvas, size, maxLineY, targetMaxValue);
+      if (percent60LineY != null) {
+        _drawPercentLabel(canvas, size, percent60LineY, '60%');
+      }
+      if (percent20LineY != null) {
+        _drawPercentLabel(canvas, size, percent20LineY, '20%');
+      }
+    }
   }
 
   @override
@@ -183,12 +222,13 @@ class _ChartPainter extends CustomPainter {
         oldDelegate.targetMaxValue != targetMaxValue ||
         oldDelegate.isMaxLineLocked != isMaxLineLocked ||
         oldDelegate.maxLineLockTime != maxLineLockTime ||
-        oldDelegate.phaseDuration != phaseDuration;
+        oldDelegate.phaseDuration != phaseDuration ||
+        oldDelegate.rightInset != rightInset;
   }
 
   double _resolveYAxisMax(bool isWorking, double currentMaxValue) {
     if (targetMaxValue > 0) {
-      return (targetMaxValue / 0.6).clamp(1.0, double.infinity);
+      return (targetMaxValue / 0.7).clamp(1.0, double.infinity);
     }
     var yMax = 50.0;
     while (currentMaxValue > yMax * 0.7) {
@@ -227,8 +267,9 @@ class _ChartPainter extends CustomPainter {
     required ValueSetter<double> lastX,
     required ValueSetter<bool> hasPoint,
     required ValueSetter<double> lastY,
+    required double contentWidth,
   }) {
-    final x = (sample.time / math.max(phaseDuration, 1.0)) * size.width;
+    final x = (sample.time / math.max(phaseDuration, 1.0)) * contentWidth;
     final y = size.height - (sample.value / maxValueOnChart) * size.height;
     if (hasPointValue) {
       path.lineTo(x, y);
@@ -253,11 +294,8 @@ class _ChartPainter extends CustomPainter {
     }
   }
 
-  void _drawPercentLine(Canvas canvas, Size size, double maxLineY, double ratio, Paint paint) {
-    final lineY = (size.height - (size.height - maxLineY) * ratio).clamp(0.0, size.height);
-    _drawDottedLine(canvas, paint, lineY, size.width);
-    final percentText = '${(ratio * 100).round()}%';
-    _drawPercentLabel(canvas, size, lineY, percentText);
+  double _resolvePercentLineY(Size size, double maxLineY, double ratio) {
+    return (size.height - (size.height - maxLineY) * ratio).clamp(0.0, size.height);
   }
 
   void _drawPercentLabel(Canvas canvas, Size size, double lineY, String text) {
@@ -269,14 +307,14 @@ class _ChartPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final textX = (size.width - textPainter.width - padding).clamp(0.0, size.width);
+    final textX = padding;
     final textY = (lineY - textPainter.height - 4.0).clamp(0.0, size.height - textPainter.height);
     textPainter.paint(canvas, Offset(textX, textY));
   }
 
   void _drawMaxLabel(Canvas canvas, Size size, double lineY, double value) {
     const padding = 8.0;
-    final text = 'MAX ${value.toStringAsFixed(1)} kg';
+    final text = 'PEAK ${value.toStringAsFixed(1)} kg';
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
@@ -284,7 +322,7 @@ class _ChartPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final textX = (size.width - textPainter.width - padding).clamp(0.0, size.width);
+    final textX = padding;
     final textY = (lineY - textPainter.height - 4.0).clamp(0.0, size.height - textPainter.height);
     textPainter.paint(canvas, Offset(textX, textY));
   }

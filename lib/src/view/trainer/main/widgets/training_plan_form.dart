@@ -3,10 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class PlanNameRow extends StatelessWidget {
-  const PlanNameRow({required this.controller, required this.onNameChanged, super.key});
+  const PlanNameRow({
+    required this.controller,
+    required this.onNameChanged,
+    this.centerText = false,
+    super.key,
+  });
 
   final TextEditingController controller;
   final ValueChanged<String> onNameChanged;
+  final bool centerText;
 
   @override
   Widget build(BuildContext context) {
@@ -21,55 +27,68 @@ class PlanNameRow extends StatelessWidget {
       builder: (context, constraints) {
         final maxTextWidth = math.max(0.0, constraints.maxWidth - iconWidth - iconSpacing);
 
+        final textField = ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, child) {
+            final displayText = value.text.isNotEmpty ? value.text : hintText;
+            final displayStyle = value.text.isNotEmpty ? textStyle : hintStyle;
+            final singleLinePainter = TextPainter(
+              text: TextSpan(text: displayText, style: displayStyle),
+              textDirection: Directionality.of(context),
+              maxLines: 1,
+            )..layout();
+            final availableLineWidth = math.max(0.0, maxTextWidth - horizontalPadding * 2);
+            final shouldWrap = singleLinePainter.width > availableLineWidth;
+            final textPainter = TextPainter(
+              text: TextSpan(text: displayText, style: displayStyle),
+              textDirection: Directionality.of(context),
+            )..layout(maxWidth: availableLineWidth);
+            final underlineWidth =
+                shouldWrap ? maxTextWidth : math.min(textPainter.width + horizontalPadding * 2, maxTextWidth);
+            final fieldWidth = shouldWrap ? maxTextWidth : math.min(underlineWidth + 8, maxTextWidth);
+
+            return SizedBox(
+              width: fieldWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  TextField(
+                    controller: controller,
+                    onChanged: onNameChanged,
+                    minLines: 1,
+                    maxLines: shouldWrap ? null : 1,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      hintText: hintText,
+                      hintStyle: hintStyle,
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 2),
+                    ),
+                    style: textStyle,
+                  ),
+                  Container(height: 1, width: underlineWidth, color: const Color(0xFFE1E1E1)),
+                ],
+              ),
+            );
+          },
+        );
+
+        if (centerText) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              textField,
+              const SizedBox(width: iconSpacing),
+              const Icon(Icons.edit, size: 16, color: Colors.black45),
+            ],
+          );
+        }
+
         return Row(
           children: <Widget>[
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, child) {
-                final displayText = value.text.isNotEmpty ? value.text : hintText;
-                final displayStyle = value.text.isNotEmpty ? textStyle : hintStyle;
-                final singleLinePainter = TextPainter(
-                  text: TextSpan(text: displayText, style: displayStyle),
-                  textDirection: Directionality.of(context),
-                  maxLines: 1,
-                )..layout();
-                final availableLineWidth = math.max(0.0, maxTextWidth - horizontalPadding * 2);
-                final shouldWrap = singleLinePainter.width > availableLineWidth;
-                final textPainter = TextPainter(
-                  text: TextSpan(text: displayText, style: displayStyle),
-                  textDirection: Directionality.of(context),
-                )..layout(maxWidth: availableLineWidth);
-                final underlineWidth =
-                    shouldWrap ? maxTextWidth : math.min(textPainter.width + horizontalPadding * 2, maxTextWidth);
-                final fieldWidth = shouldWrap ? maxTextWidth : math.min(underlineWidth + 8, maxTextWidth);
-
-                return SizedBox(
-                  width: fieldWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      TextField(
-                        controller: controller,
-                        onChanged: onNameChanged,
-                        minLines: 1,
-                        maxLines: shouldWrap ? null : 1,
-                        keyboardType: TextInputType.multiline,
-                        decoration: const InputDecoration(
-                          hintText: hintText,
-                          hintStyle: hintStyle,
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 2),
-                        ),
-                        style: textStyle,
-                      ),
-                      Container(height: 1, width: underlineWidth, color: const Color(0xFFE1E1E1)),
-                    ],
-                  ),
-                );
-              },
-            ),
+            textField,
             const SizedBox(width: iconSpacing),
             const Icon(Icons.edit, size: 16, color: Colors.black45),
           ],
