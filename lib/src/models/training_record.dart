@@ -261,7 +261,8 @@ class TrainingRecord {
       restSeconds: (json['restSeconds'] as num?)?.toInt() ?? 0,
       cycles: (json['cycles'] as num?)?.toInt() ?? 0,
       totalSeconds: (json['totalSeconds'] as num?)?.toInt() ?? 0,
-      startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ?? DateTime.now(),
+      startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       groupedSamples: rawGroupedSamples
           .whereType<Map>()
           .map((group) => TrainingSampleGroup.fromJson(Map<String, dynamic>.from(group)))

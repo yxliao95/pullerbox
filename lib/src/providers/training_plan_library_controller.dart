@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/training_plan.dart';
 import '../services/training_plan_storage.dart';
+import 'system_providers.dart';
 import 'training_plan_controller.dart';
 
 class TrainingPlanLibraryState {
@@ -141,7 +142,8 @@ class TrainingPlanLibraryController extends Notifier<TrainingPlanLibraryState> {
   }
 
   String addPlan() {
-    final planId = 'plan-${DateTime.now().microsecondsSinceEpoch}';
+    final clock = ref.read(clockProvider);
+    final planId = 'plan-${clock.now().microsecondsSinceEpoch}';
     final newPlan = TrainingPlanItem(
       id: planId,
       plan: TrainingPlanState(name: '默认', workSeconds: 7, restSeconds: 3, cycles: 20),

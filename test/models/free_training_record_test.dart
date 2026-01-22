@@ -40,4 +40,11 @@ void main() {
     expect(decoded.deltaMaxValue, deltaMaxValue);
     expect(decoded.deltaMinValue, deltaMinValue);
   });
+
+  test('FreeTrainingRecord.fromJson falls back to epoch timestamp when missing', () {
+    final decoded = FreeTrainingRecord.fromJson(<String, dynamic>{});
+
+    expect(decoded.startedAt, DateTime.fromMillisecondsSinceEpoch(0, isUtc: true));
+    expect(decoded.startedAt.isUtc, isTrue);
+  });
 }

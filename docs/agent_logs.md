@@ -251,3 +251,6 @@
 - 新增测试依赖 fake_async 并修正 storage 测试的命名告警，影响 tests 与 pubspec。
 - 修复训练计划与训练记录 storage 测试的命名告警，影响 services 单元测试。
 - 修复 TrainingMonitorController 单测自动销毁导致的状态流转失败，影响 providers 单元测试。
+- 修改点：新增 `lib/src/services/clock.dart` 与 `lib/src/services/random_source.dart`，新增 `lib/src/providers/system_providers.dart`，TrainingMonitorController 与 TrainingPlanLibraryController 改为可注入时间/随机源；`lib/src/models/free_training_record.dart` 与 `lib/src/models/training_record.dart` 的反序列化缺省时间改为 UTC epoch；补齐 `lib/src/views/trainer/main/widgets/training_plan_form.dart` 的 foundation 导入；新增模型测试覆盖缺省时间。
+- 影响范围：涉及 services/providers/models/views/test；状态机与指标逻辑不变，时间与随机性来源改为可替换可控，数据流不变。
+- 数据结构变更与迁移方式：无数据结构变化；历史数据无需迁移，缺失 `startedAt` 时默认落在 UTC epoch。

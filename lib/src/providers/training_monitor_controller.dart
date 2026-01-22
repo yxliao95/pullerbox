@@ -8,7 +8,10 @@ import '../models/free_training_record.dart';
 import '../models/training_plan.dart';
 import '../models/training_record.dart';
 import '../models/training_summary.dart';
+import '../services/clock.dart';
+import '../services/random_source.dart';
 import 'free_training_record_provider.dart';
+import 'system_providers.dart';
 import 'training_monitor_state.dart';
 import 'training_record_provider.dart';
 import 'training_statistics_provider.dart';
@@ -30,7 +33,8 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
   static const double freeTrainingQuantile = 0.99;
   static const double freeTrainingControlRatio = 0.95;
 
-  final math.Random _random = math.Random();
+  late final RandomSource _randomSource;
+  late final Clock _clock;
   Timer? _timer;
 
   final TrainingMonitorConfig _config;
@@ -47,7 +51,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
   int _currentCycle = 1;
   double _workElapsedSeconds = 0.0;
   double _activeElapsedSeconds = 0.0;
-  DateTime _trainingStartedAt = DateTime.now();
+  DateTime _trainingStartedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   final List<double> _workValues = <double>[];
   final List<TrainingSampleGroup> _groupedWorkSamples = <TrainingSampleGroup>[];
   List<TrainingSampleGroup>? _pendingGroupedSamples;
@@ -103,6 +107,8 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
 
   @override
   TrainingMonitorState build() {
+    _randomSource = ref.read(randomSourceProvider);
+    _clock = ref.read(clockProvider);
     _freeTrainingMetricsWindowSampleCount = (freeTrainingMetricsWindowSeconds / sampleIntervalSeconds).round();
     if (_config.isFreeTraining) {
       _startFreeTraining();
@@ -407,7 +413,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
     _recordSaved = false;
     _workElapsedSeconds = 0.0;
     _activeElapsedSeconds = 0.0;
-    _trainingStartedAt = DateTime.now();
+    _trainingStartedAt = _clock.now();
     _chartMaxValue = defaultChartMaxValue;
     _chartMaxLocked = true;
     _chartMaxReachTime = 0.0;
@@ -433,7 +439,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
     _recordSaved = false;
     _workElapsedSeconds = 0.0;
     _activeElapsedSeconds = 0.0;
-    _trainingStartedAt = DateTime.now();
+    _trainingStartedAt = _clock.now();
     _chartMaxValue = defaultChartMaxValue;
     _chartMaxLocked = true;
     _chartMaxReachTime = 0.0;
@@ -483,7 +489,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
     if (max <= min) {
       return min;
     }
-    return min + _random.nextDouble() * (max - min);
+    return min + _randomSource.nextDouble() * (max - min);
   }
 
   double _roundToTenth(double value) {
@@ -539,7 +545,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
   }
 
   void _prepareFatigueDrop(double phaseDurationSeconds) {
-    _fatigueWillDrop = _fatigueModeActive && _random.nextDouble() < 0.3;
+    _fatigueWillDrop = _fatigueModeActive && _randomSource.nextDouble() < 0.3;
     _fatigueDropStarted = false;
     _fatigueDropStartValue = 0.0;
     if (!_fatigueWillDrop) {
@@ -613,7 +619,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
       return targetValue;
     }
     if (_startupHoldRemaining == 0) {
-      _startupHoldRemaining = _random.nextInt(4);
+      _startupHoldRemaining = _randomSource.nextInt(4);
     }
     final nextTime = (_elapsedInPhase + sampleIntervalSeconds).clamp(0.0, _cycleStartDuration);
     final ratio = (nextTime / _cycleStartDuration).clamp(0.0, 1.0);
@@ -637,7 +643,7 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
 
   double _nextDescendingSample({required double targetValue}) {
     if (_descendingHoldRemaining == 0) {
-      _descendingHoldRemaining = _random.nextInt(4);
+      _descendingHoldRemaining = _randomSource.nextInt(4);
     }
     final baselineDelta = targetValue - _simulatedValue;
     final totalDelta = baselineDelta + _descendingPendingDelta;

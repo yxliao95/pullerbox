@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class PlanNameRow extends StatelessWidget {
@@ -27,8 +28,9 @@ class PlanNameRow extends StatelessWidget {
       builder: (context, constraints) {
         final maxTextWidth = math.max(0.0, constraints.maxWidth - iconWidth - iconSpacing);
 
+        final ValueListenable<TextEditingValue> textListenable = controller;
         final textField = ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
+          valueListenable: textListenable,
           builder: (context, value, child) {
             final displayText = value.text.isNotEmpty ? value.text : hintText;
             final displayStyle = value.text.isNotEmpty ? textStyle : hintStyle;

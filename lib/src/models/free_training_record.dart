@@ -43,7 +43,8 @@ class FreeTrainingRecord {
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '自由训练',
       totalSeconds: (json['totalSeconds'] as num?)?.toDouble() ?? 0.0,
-      startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ?? DateTime.now(),
+      startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       controlMaxValue: (json['controlMaxValue'] as num?)?.toDouble(),
       longestControlTimeSeconds: (json['longestControlTimeSeconds'] as num?)?.toDouble(),
       currentWindowMeanValue: (json['currentWindowMeanValue'] as num?)?.toDouble(),

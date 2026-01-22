@@ -68,4 +68,14 @@ void main() {
     expect(decoded.records.first.startedAt.toIso8601String(), record.startedAt.toIso8601String());
     expect(decoded.records.first.startedAt.isUtc, isTrue);
   });
+
+  test('TrainingRecord.fromJson falls back to epoch timestamp when missing', () {
+    final decoded = TrainingRecord.fromJson(<String, dynamic>{
+      'groupedSamples': <Map<String, dynamic>>[],
+      'statistics': <String, dynamic>{},
+    });
+
+    expect(decoded.startedAt, DateTime.fromMillisecondsSinceEpoch(0, isUtc: true));
+    expect(decoded.startedAt.isUtc, isTrue);
+  });
 }
