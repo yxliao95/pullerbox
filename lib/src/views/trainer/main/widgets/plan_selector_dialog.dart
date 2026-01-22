@@ -176,8 +176,10 @@ class PlanSelectorDialog extends ConsumerWidget {
                                     })
                             : () {
                                 final planId = libraryController.addPlan();
-                                final selectedPlan =
-                                    ref.read(trainingPlanLibraryProvider).plans.firstWhere((plan) => plan.id == planId);
+                                final selectedPlan = ref
+                                    .read(trainingPlanLibraryProvider)
+                                    .plans
+                                    .firstWhere((plan) => plan.id == planId);
                                 ref.read(trainingPlanProvider.notifier).applyPlan(selectedPlan.plan);
                                 Navigator.of(context).pop();
                               },
@@ -187,7 +189,7 @@ class PlanSelectorDialog extends ConsumerWidget {
                           shape: const StadiumBorder(),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        child: Text(isEditing ? '批量删除' : '新增计划'),
+                        child: Text(isEditing ? '删除' : '新增计划'),
                       ),
                     ),
                   ),

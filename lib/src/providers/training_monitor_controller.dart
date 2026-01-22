@@ -864,8 +864,25 @@ class TrainingMonitorController extends Notifier<TrainingMonitorState> {
       currentWindowDeltaValue: _freeTrainingCurrentWindowDeltaValue,
       deltaMaxValue: _freeTrainingDeltaMaxValue,
       deltaMinValue: _freeTrainingDeltaMinValue,
+      samples: _downsampleFreeTrainingSamples(_freeTrainingAllSamples),
     );
     ref.read(freeTrainingRecordProvider.notifier).addRecord(record);
+  }
+
+  List<double> _downsampleFreeTrainingSamples(List<double> samples, {int maxPoints = 120}) {
+    if (samples.isEmpty) {
+      return <double>[];
+    }
+    if (samples.length <= maxPoints) {
+      return List<double>.from(samples);
+    }
+    final step = (samples.length - 1) / (maxPoints - 1);
+    final output = <double>[];
+    for (int i = 0; i < maxPoints; i++) {
+      final index = (i * step).round().clamp(0, samples.length - 1);
+      output.add(samples[index]);
+    }
+    return output;
   }
 
   void _ensureCycleGroup() {

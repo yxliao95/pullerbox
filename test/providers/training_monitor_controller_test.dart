@@ -13,11 +13,7 @@ void main() {
   const sampleInterval = Duration(milliseconds: 50);
 
   TrainingMonitorConfig buildConfig() {
-    return const TrainingMonitorConfig(
-      plan: plan,
-      isDeviceConnected: false,
-      isFreeTraining: false,
-    );
+    return const TrainingMonitorConfig(plan: plan, isDeviceConnected: false, isFreeTraining: false);
   }
 
   test('TrainingMonitorController runs prepare -> running -> finished flow', () {
@@ -28,7 +24,7 @@ void main() {
       final config = buildConfig();
       final subscription = container.listen(
         trainingMonitorControllerProvider(config),
-        (_, __) {},
+        (_, _) {},
         fireImmediately: true,
       );
       addTearDown(subscription.close);
@@ -58,7 +54,7 @@ void main() {
       final config = buildConfig();
       final subscription = container.listen(
         trainingMonitorControllerProvider(config),
-        (_, __) {},
+        (_, _) {},
         fireImmediately: true,
       );
       addTearDown(subscription.close);

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../models/metric_definitions.dart';
+import '../../../../providers/metric_visibility_provider.dart';
 import 'measure_size.dart';
 
-class FreeTrainingSummaryOverlay extends StatefulWidget {
+class FreeTrainingSummaryOverlay extends ConsumerStatefulWidget {
   const FreeTrainingSummaryOverlay({
     required this.defaultTitle,
     required this.totalSeconds,
@@ -29,10 +32,10 @@ class FreeTrainingSummaryOverlay extends StatefulWidget {
   final ValueChanged<String> onSaveAndExit;
 
   @override
-  State<FreeTrainingSummaryOverlay> createState() => _FreeTrainingSummaryOverlayState();
+  ConsumerState<FreeTrainingSummaryOverlay> createState() => _FreeTrainingSummaryOverlayState();
 }
 
-class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay> {
+class _FreeTrainingSummaryOverlayState extends ConsumerState<FreeTrainingSummaryOverlay> {
   static const _fallbackTitle = '自由训练';
   late final TextEditingController _titleController;
   double _exitButtonHeight = 0.0;
@@ -52,6 +55,19 @@ class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final visibility = ref.watch(metricVisibilityProvider);
+    const metricsOrder = <FreeSummaryMetric>[
+      FreeSummaryMetric.controlMax,
+      FreeSummaryMetric.longestControl,
+      FreeSummaryMetric.windowMean,
+      FreeSummaryMetric.windowDelta,
+      FreeSummaryMetric.deltaMax,
+      FreeSummaryMetric.deltaMin,
+      FreeSummaryMetric.totalDuration,
+    ];
+    final summaryMetrics = metricsOrder
+        .where((metric) => visibility.freeVisibility(metric).showInSummary)
+        .toList();
     const defaultExitHeight = 36.0;
     const topPadding = 6.0;
     final resolvedExitHeight = _exitButtonHeight > 0 ? _exitButtonHeight : defaultExitHeight;
@@ -117,13 +133,11 @@ class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay>
                     runSpacing: 16,
                     alignment: WrapAlignment.center,
                     children: <Widget>[
-                      _SummaryMetric(label: '最大控制力量', value: _formatKg(widget.controlMaxValue)),
-                      _SummaryMetric(label: '最长连续控制', value: _formatSeconds(widget.longestControlTimeSeconds)),
-                      _SummaryMetric(label: '1s均值', value: _formatKg(widget.currentWindowMeanValue)),
-                      _SummaryMetric(label: '1s变化', value: _formatKg(widget.currentWindowDeltaValue)),
-                      _SummaryMetric(label: '1s最大增长', value: _formatKg(widget.deltaMaxValue)),
-                      _SummaryMetric(label: '1s最大下降', value: _formatKg(widget.deltaMinValue)),
-                      _SummaryMetric(label: '总时长', value: _formatSeconds(widget.totalSeconds)),
+                      for (final metric in summaryMetrics)
+                        _SummaryMetric(
+                          label: freeSummaryMetricDefinitionMap[metric]?.label ?? '指标',
+                          value: _metricValue(metric),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -178,6 +192,25 @@ class _FreeTrainingSummaryOverlayState extends State<FreeTrainingSummaryOverlay>
   String _resolveTitle() {
     final trimmed = _titleController.text.trim();
     return trimmed.isEmpty ? _fallbackTitle : trimmed;
+  }
+
+  String _metricValue(FreeSummaryMetric metric) {
+    switch (metric) {
+      case FreeSummaryMetric.controlMax:
+        return _formatKg(widget.controlMaxValue);
+      case FreeSummaryMetric.longestControl:
+        return _formatSeconds(widget.longestControlTimeSeconds);
+      case FreeSummaryMetric.windowMean:
+        return _formatKg(widget.currentWindowMeanValue);
+      case FreeSummaryMetric.windowDelta:
+        return _formatKg(widget.currentWindowDeltaValue);
+      case FreeSummaryMetric.deltaMax:
+        return _formatKg(widget.deltaMaxValue);
+      case FreeSummaryMetric.deltaMin:
+        return _formatKg(widget.deltaMinValue);
+      case FreeSummaryMetric.totalDuration:
+        return _formatSeconds(widget.totalSeconds);
+    }
   }
 
   String _formatKg(double? value) {

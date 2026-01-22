@@ -10,6 +10,7 @@ void main() {
   const currentWindowDeltaValue = -1.2;
   const deltaMaxValue = 2.0;
   const deltaMinValue = -2.0;
+  const samples = <double>[10.0, 12.5, 11.0];
 
   test('FreeTrainingRecord round-trip preserves UTC timestamp', () {
     final startedAt = DateTime.utc(2025, 1, 1, 12, 0, 0);
@@ -24,6 +25,7 @@ void main() {
       currentWindowDeltaValue: currentWindowDeltaValue,
       deltaMaxValue: deltaMaxValue,
       deltaMinValue: deltaMinValue,
+      samples: samples,
     );
 
     final decoded = FreeTrainingRecord.fromJson(record.toJson());
@@ -39,6 +41,7 @@ void main() {
     expect(decoded.currentWindowDeltaValue, currentWindowDeltaValue);
     expect(decoded.deltaMaxValue, deltaMaxValue);
     expect(decoded.deltaMinValue, deltaMinValue);
+    expect(decoded.samples, samples);
   });
 
   test('FreeTrainingRecord.fromJson falls back to epoch timestamp when missing', () {
@@ -46,5 +49,6 @@ void main() {
 
     expect(decoded.startedAt, DateTime.fromMillisecondsSinceEpoch(0, isUtc: true));
     expect(decoded.startedAt.isUtc, isTrue);
+    expect(decoded.samples, isEmpty);
   });
 }

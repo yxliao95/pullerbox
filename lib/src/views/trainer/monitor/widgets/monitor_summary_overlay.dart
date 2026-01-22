@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../models/metric_definitions.dart';
 import '../../../../models/training_record.dart';
 import '../../../../models/training_summary.dart';
+import '../../../../providers/metric_visibility_provider.dart';
 import 'measure_size.dart';
 
-class MonitorSummaryOverlay extends StatefulWidget {
+class MonitorSummaryOverlay extends ConsumerStatefulWidget {
   const MonitorSummaryOverlay({
     required this.summary,
     required this.showStatistics,
@@ -19,14 +22,20 @@ class MonitorSummaryOverlay extends StatefulWidget {
   final VoidCallback onSaveAndExit;
 
   @override
-  State<MonitorSummaryOverlay> createState() => _MonitorSummaryOverlayState();
+  ConsumerState<MonitorSummaryOverlay> createState() => _MonitorSummaryOverlayState();
 }
 
-class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
+class _MonitorSummaryOverlayState extends ConsumerState<MonitorSummaryOverlay> {
   double _exitButtonHeight = 0.0;
 
   @override
   Widget build(BuildContext context) {
+    final visibility = ref.watch(metricVisibilityProvider);
+    final summaryDefinitions = timedSummaryMetricDefinitions
+        .where((definition) => visibility.timedVisibility(definition.metric).showInSummary)
+        .toList();
+    final showMetrics =
+        widget.showStatistics && widget.summary.hasStatistics && summaryDefinitions.isNotEmpty;
     const defaultExitHeight = 36.0;
     const topPadding = 6.0;
     final resolvedExitHeight = _exitButtonHeight > 0 ? _exitButtonHeight : defaultExitHeight;
@@ -98,13 +107,13 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
                       _SummaryMetric(label: '总时间', value: _formatDuration(widget.summary.totalSeconds)),
                     ],
                   ),
-                  if (widget.showStatistics && widget.summary.hasStatistics) ...<Widget>[
+                  if (showMetrics) ...<Widget>[
                     const SizedBox(height: 20),
                     Wrap(
                       spacing: 36,
                       runSpacing: 16,
                       alignment: WrapAlignment.center,
-                      children: _buildStatisticsMetrics(widget.summary.statistics),
+                      children: _buildStatisticsMetrics(widget.summary.statistics, summaryDefinitions),
                     ),
                     const SizedBox(height: 28),
                   ] else
@@ -163,7 +172,10 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
     return '${minutes.toString()}:${remaining.toString().padLeft(2, '0')}';
   }
 
-  List<Widget> _buildStatisticsMetrics(TrainingStatistics statistics) {
+  List<Widget> _buildStatisticsMetrics(
+    TrainingStatistics statistics,
+    List<MetricDefinition<TimedSummaryMetric>> definitions,
+  ) {
     final hasFatigue = statistics.fatigueStartCycle > 0;
     final fatigueLabel = hasFatigue
         ? '第${statistics.fatigueStartCycle}轮 / ${statistics.fatigueStartTime.toStringAsFixed(1)}s'
@@ -172,15 +184,39 @@ class _MonitorSummaryOverlayState extends State<MonitorSummaryOverlay> {
         ? (statistics.minControlStrengthMissing ? '缺失' : _formatWeight(statistics.minControlStrength))
         : '未触发';
     return <Widget>[
-      _SummaryMetric(label: '最大力量', value: _formatWeight(statistics.maxStrengthSession)),
-      _SummaryMetric(label: '最大控制力量', value: _formatWeight(statistics.maxControlStrengthSession)),
-      _SummaryMetric(label: '控制循环数', value: statistics.controlCycles.toString()),
-      _SummaryMetric(label: '力竭信号', value: fatigueLabel),
-      _SummaryMetric(label: '最低控制力量', value: minControlLabel),
-      _SummaryMetric(label: '降幅均值', value: _formatPercent(statistics.dropMean, hasFatigue)),
-      _SummaryMetric(label: '降幅最大', value: _formatPercent(statistics.dropMax, hasFatigue)),
-      _SummaryMetric(label: '降幅标准差', value: _formatPercent(statistics.dropStd, hasFatigue)),
+      for (final definition in definitions)
+        _SummaryMetric(
+          label: definition.label,
+          value: _summaryValue(statistics, definition.metric, fatigueLabel, minControlLabel, hasFatigue),
+        ),
     ];
+  }
+
+  String _summaryValue(
+    TrainingStatistics statistics,
+    TimedSummaryMetric metric,
+    String fatigueLabel,
+    String minControlLabel,
+    bool hasFatigue,
+  ) {
+    switch (metric) {
+      case TimedSummaryMetric.maxStrength:
+        return _formatWeight(statistics.maxStrengthSession);
+      case TimedSummaryMetric.maxControlStrength:
+        return _formatWeight(statistics.maxControlStrengthSession);
+      case TimedSummaryMetric.controlCycles:
+        return statistics.controlCycles.toString();
+      case TimedSummaryMetric.fatigueSignal:
+        return fatigueLabel;
+      case TimedSummaryMetric.minControlStrength:
+        return minControlLabel;
+      case TimedSummaryMetric.dropMean:
+        return _formatPercent(statistics.dropMean, hasFatigue);
+      case TimedSummaryMetric.dropMax:
+        return _formatPercent(statistics.dropMax, hasFatigue);
+      case TimedSummaryMetric.dropStd:
+        return _formatPercent(statistics.dropStd, hasFatigue);
+    }
   }
 
   String _formatWeight(double value) {

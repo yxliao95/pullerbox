@@ -10,6 +10,7 @@ class FreeTrainingRecord {
     required this.currentWindowDeltaValue,
     required this.deltaMaxValue,
     required this.deltaMinValue,
+    this.samples = const <double>[],
   });
 
   final String id;
@@ -22,6 +23,7 @@ class FreeTrainingRecord {
   final double? currentWindowDeltaValue;
   final double? deltaMaxValue;
   final double? deltaMinValue;
+  final List<double> samples;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -35,10 +37,12 @@ class FreeTrainingRecord {
       'currentWindowDeltaValue': currentWindowDeltaValue,
       'deltaMaxValue': deltaMaxValue,
       'deltaMinValue': deltaMinValue,
+      'samples': samples,
     };
   }
 
   factory FreeTrainingRecord.fromJson(Map<String, dynamic> json) {
+    final rawSamples = json['samples'] as List? ?? <dynamic>[];
     return FreeTrainingRecord(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '自由训练',
@@ -51,6 +55,7 @@ class FreeTrainingRecord {
       currentWindowDeltaValue: (json['currentWindowDeltaValue'] as num?)?.toDouble(),
       deltaMaxValue: (json['deltaMaxValue'] as num?)?.toDouble(),
       deltaMinValue: (json['deltaMinValue'] as num?)?.toDouble(),
+      samples: rawSamples.whereType<num>().map((value) => value.toDouble()).toList(),
     );
   }
 }

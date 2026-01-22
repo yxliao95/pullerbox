@@ -128,8 +128,19 @@ class TrainingStatisticsCalculator {
         .where((snapshot) => snapshot.values.isNotEmpty && snapshot.outTime <= controlToleranceSeconds)
         .length;
 
+    final baselineValues = <double>[];
+    for (final snapshot in cycleSnapshots.take(2)) {
+      if (snapshot.values.isEmpty) {
+        continue;
+      }
+      final gate = snapshot.maxStrength * thresholdRatio;
+      if (gate <= 0) {
+        continue;
+      }
+      baselineValues.addAll(snapshot.values.where((value) => value >= gate));
+    }
     final baselineCandidates = cycleSnapshots.take(2).map((snapshot) => snapshot.maxStrength).toList();
-    final baseline = _median(baselineCandidates);
+    final baseline = baselineValues.isEmpty ? _median(baselineCandidates) : _median(baselineValues);
     final fatigueThreshold = baseline * fatigueThresholdRatio;
     final failWindow = _samplesForDuration(fatigueDurationSeconds, sampleIntervalSeconds);
     final failFlags = List<bool>.filled(cycleSnapshots.length, false);

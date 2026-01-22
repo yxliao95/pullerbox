@@ -8,6 +8,7 @@ void main() {
   const storageKey = FreeTrainingRecordStorage.storageKey;
   const recordId = 'f1';
   const title = 'Free Session';
+  const samples = <double>[8.0, 9.5, 11.0];
 
   FreeTrainingRecord buildRecord() {
     return FreeTrainingRecord(
@@ -21,6 +22,7 @@ void main() {
       currentWindowDeltaValue: -0.5,
       deltaMaxValue: 1.0,
       deltaMinValue: -1.0,
+      samples: samples,
     );
   }
 
@@ -47,6 +49,7 @@ void main() {
     expect(restored!.records.length, 1);
     expect(restored.records.first.id, recordId);
     expect(restored.records.first.title, title);
+    expect(restored.records.first.samples, samples);
   });
 
   test('loadHistory returns null when stored payload is invalid', () async {

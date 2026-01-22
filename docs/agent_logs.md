@@ -254,3 +254,87 @@
 - 修改点：新增 `lib/src/services/clock.dart` 与 `lib/src/services/random_source.dart`，新增 `lib/src/providers/system_providers.dart`，TrainingMonitorController 与 TrainingPlanLibraryController 改为可注入时间/随机源；`lib/src/models/free_training_record.dart` 与 `lib/src/models/training_record.dart` 的反序列化缺省时间改为 UTC epoch；补齐 `lib/src/views/trainer/main/widgets/training_plan_form.dart` 的 foundation 导入；新增模型测试覆盖缺省时间。
 - 影响范围：涉及 services/providers/models/views/test；状态机与指标逻辑不变，时间与随机性来源改为可替换可控，数据流不变。
 - 数据结构变更与迁移方式：无数据结构变化；历史数据无需迁移，缺失 `startedAt` 时默认落在 UTC epoch。
+- 修改点：在记录页新增顶部日历组件，新增 `lib/src/views/record/widgets/record_calendar.dart` 并在 `lib/src/views/record/history_page.dart` 组装展示；属于 UI 结构调整。
+- 修改点：记录页日历顶部新增月份导航，支持左右箭头切换月份；调整 `lib/src/views/record/widgets/record_calendar.dart` 为本地状态驱动。
+- 修改点：记录页日历样式收紧（内边距、间距、字号、箭头按钮尺寸），提升紧凑度；修改 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页列表外层增加顶部 SafeArea，避免内容被系统状态栏遮挡；修改 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页日历 cell 移除默认背景，今日日期改为灰色背景；有训练日期显示蓝色横线并置于背景之上；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历今日标记改为红色空心圆圈，并与蓝色训练横线错开避免重叠；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历今日标记改为红色字体显示，移除灰色背景；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历无训练日期文字改为 `FontWeight.normal`，保留训练日期的强调权重；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：压缩记录页日历高度（缩小内边距、标题/星期字号、网格间距与比例、箭头按钮尺寸）；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：压缩日历头部高度，缩小左右箭头尺寸与标题字号；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：日历头部左右按钮改为 shrinkWrap 触控尺寸并压缩视觉密度，确保高度按约束显示；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：移除 IconButton 不支持的 `materialTapTargetSize` 参数以修复编译错误；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历日期颜色按字体逻辑区分为蓝/黑/灰（今日蓝色、有训练黑色、无训练灰色）；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历训练蓝线宽度改为与日期文本宽度一致，按字体样式动态测量；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：压缩记录页日历 cell 高度，增大网格宽高比并下移蓝线间距；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历头部与日期网格之间新增分割线；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历标题支持点击弹出年月轮盘选择器，包含“今日”和“确定”按钮；新增 `_MonthPickerSheet` 并在 `lib/src/views/record/widgets/record_calendar.dart` 中接入。
+- 修改点：年月轮盘仅显示数字，单位“年/月”改为静态标签不参与滚动；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：年月轮盘容器增加左右内边距，避免贴边显示；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：轮盘布局调整为年/月各自列内包含数字与单位，确保两列等宽；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：将星期与日期网格封装为 `_CalendarBody`，并为日历主体单独设置左右内边距；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：日历主体 cell 文本改为使用 Stack 居中对齐，确保文字居中显示；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：日历主体星期行改为与日期网格同样的 7 列网格布局，统一列宽以对齐；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：日历标题年月增加下拉箭头图标，强化可点击提示；更新 `lib/src/views/record/widgets/record_calendar.dart`。
+- 修改点：记录页日历下方新增自由训练/计时训练可切换面板，列表按选中面板展示并提供各自空态提示；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页日历与记录列表上方新增分区标题“训练日历”“记录”；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页切换控件改为 TabBar 样式，使用标签切换自由训练/计时训练列表展示；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页切换控件改为默认 TabBar 样式，移除自定义容器与指示器样式；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页移除 TabBar 切换，改为按日期分组的横向滑动卡片列表展示自由/计时训练；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页移除卡片滑动删除；当日记录改用 `CarouselView` 横向展示；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录页当日 CarouselView 使用权重布局，权重为 [4,1] 且初始显示第一个；当日仅一条记录时改为单列满宽展示；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：移除训练记录卡片点击交互与详情跳转；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`、`lib/src/views/record/history_page.dart`。
+- 修改点：记录卡片在 CarouselView 缩放时限制标题与统计文本为单行省略，并使用等分列避免溢出；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。
+- 修改点：记录页当日横向列表移除 CarouselView，改为普通横向 ListView；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录区标题改为下拉选择器，可切换“计时训练记录/自由训练记录”，默认计时训练记录；记录列表按选择过滤；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：计时训练记录卡片新增“详情”按钮并跳转训练详情页；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：计时训练记录卡片详情入口改为右箭头图标按钮；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：计时训练记录卡片中部新增循环平均力量柱状图展示；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：柱状图根据卡片可用宽度动态计算柱宽与间距，限制总宽度不超出列表项；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：移除计时训练记录卡片右侧详情按钮，改为整卡点击跳转详情页；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：记录页横向列表移除固定高度，改为水平滚动行以便卡片高度随内容自适应；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：计时训练记录卡片改为展示最大力量/力竭信号/降幅标准差；训练详情页新增指标说明问号弹窗；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/training_record_detail_page.dart`。
+- 修改点：指标说明补充计算方式描述，便于理解指标来源；更新 `lib/src/views/record/training_record_detail_page.dart`。
+- 修改点：指标说明补充算法细节的文字解释，明确筛选范围与阈值规则；更新 `lib/src/views/record/training_record_detail_page.dart`。
+- 修改点：记录页新增右侧筛选面板与过滤逻辑，支持训练类型/指标摘要/柱状图指标配置；记录卡片与自由训练卡片按选项动态展示指标与柱状图；新增 `lib/src/views/record/record_filter_options.dart`，更新 `lib/src/views/record/history_page.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。
+- 修改点：过滤弹窗新增底部“应用”按钮并按应用结果更新记录列表；指标摘要显示二级标题；摘要指标扩展为详情页全部指标；更新 `lib/src/views/record/history_page.dart`、`lib/src/views/record/record_filter_options.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。
+- 修改点：过滤弹窗新增重置按钮，并设定默认筛选为计时训练/指定摘要指标/柱状图最大力量；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：柱状图默认指标改为平均力量，并同步重置默认值；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录列表卡片宽度改为屏幕可用宽度的90%；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：记录列表卡片宽度改为固定300；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：自由训练记录新增采样数据持久化，并在记录卡片中展示折线缩略图；更新 `lib/src/models/free_training_record.dart`、`lib/src/providers/training_monitor_controller.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`、`test/models/free_training_record_test.dart`、`test/services/free_training_record_storage_test.dart`。
+- 影响范围：models / providers / views / services / tests；新增自由训练采样数据的展示与持久化，不影响计时训练状态机。
+- 数据结构变更与迁移方式：`FreeTrainingRecord` 新增 `samples` 字段（`List<double>`），旧数据缺失时回退为空列表；保存时对采样做下采样以控制体积。
+- 修改点：自由训练记录折线缩略图改为仅保存前60秒采样并下采样；更新 `lib/src/providers/training_monitor_controller.dart`。
+- 修改点：修复自由训练缩略图宽度为0导致仅显示竖线的问题，改为按约束尺寸绘制自定义画布；更新 `lib/src/views/record/widgets/free_training_record_card.dart`。
+- 修改点：自由训练缩略图改为保存与展示全程采样，并按总时长映射横轴；更新 `lib/src/providers/training_monitor_controller.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。
+- 修改点：训练详情页指标说明补充更明确的算法细节措辞；更新 `lib/src/views/record/training_record_detail_page.dart`。
+- 修改点：计时训练记录卡片在无图表数据时显示“暂无曲线”提示，与自由训练样式一致；更新 `lib/src/views/record/widgets/record_card.dart`。
+- 修改点：记录页在训练日历与记录列表之间新增计时训练最大力量折线数据总览；更新 `lib/src/views/record/history_page.dart`。
+- 修改点：训练详情页指标说明弹窗禁止点击遮罩关闭；更新 `lib/src/views/record/training_record_detail_page.dart`。（修复）
+- 修改点：新增指标定义与可见性配置数据结构，统一管理计划/自由训练指标文案与说明；新增 `lib/src/models/metric_definitions.dart`、`lib/src/providers/metric_visibility_provider.dart`。（结构调整）
+- 修改点：结算页/过滤页/详情页按指标可见性配置渲染；指标说明与列表改为读取统一定义；更新 `lib/src/views/record/history_page.dart`、`lib/src/views/record/training_record_detail_page.dart`、`lib/src/views/record/free_training_record_detail_page.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`、`lib/src/views/trainer/monitor/widgets/monitor_summary_overlay.dart`、`lib/src/views/trainer/monitor/widgets/free_training_summary_overlay.dart`、`lib/src/views/trainer/monitor/widgets/free_training_data_panel.dart`；移除 `lib/src/views/record/record_filter_options.dart`。（重构）
+- 修改点：新增指标可见性 provider 测试，确保默认启用与可更新行为；新增 `test/providers/metric_visibility_provider_test.dart`。（测试）
+- 修改点：指标可见性 provider 改为 Notifier/NotifierProvider 以兼容现有 Riverpod 3 约定；更新 `lib/src/providers/metric_visibility_provider.dart`。（修复）
+- 修改点：修复记录页日期格式插值警告并接入 RadioGroup 去除过时 API 提示；更新 `lib/src/views/record/history_page.dart`。（修复）
+- 修改点：指标定义新增 `shortLabel`，记录列表卡片使用短标题显示，其余位置保持原标签；更新 `lib/src/models/metric_definitions.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（结构调整）
+- 修改点：指标定义移除 `helpLabel` 并统一使用 `label` 展示；更新 `lib/src/models/metric_definitions.dart`、`lib/src/views/record/training_record_detail_page.dart`、`lib/src/views/trainer/monitor/widgets/free_training_data_panel.dart`。（结构调整）
+- 修改点：指标说明支持额外补充条目，仅在说明弹窗中展示；新增 `MetricGuideDefinition` 与补充定义列表；更新 `lib/src/models/metric_definitions.dart`、`lib/src/views/record/training_record_detail_page.dart`、`lib/src/views/trainer/monitor/widgets/free_training_data_panel.dart`。（结构调整）
+- 修改点：力竭信号基准力量改为取前两轮持续阶段中 ≥0.95 最大力量的采样集合中位数，并更新文档说明；更新 `lib/src/services/training_statistics_calculator.dart`、`docs/timer_metrics.md`。（修复）
+- 修改点：记录页筛选默认计时训练指标改为最大控制力量/最低控制力量/力竭信号；更新 。（调整）
+- 修改点：记录页筛选默认计时训练指标改为最大控制力量/最低控制力量/力竭信号；更新 `lib/src/views/record/history_page.dart`。（调整）
+- 修改点：指标说明弹窗按“定义/指标”分组展示，先显示定义再显示指标；更新 `lib/src/views/record/training_record_detail_page.dart`。（调整）
+- 修改点：自由训练面板的指标说明弹窗样式对齐记录详情页，按“定义/指标”分组且禁止点击遮罩关闭；更新 `lib/src/views/trainer/monitor/widgets/free_training_data_panel.dart`、`lib/src/views/trainer/monitor/widgets/free_training_panel_widgets.dart`。（调整）
+- 修改点：指标说明弹窗在仅有指标无定义时隐藏“指标”小标题；更新 `lib/src/views/record/training_record_detail_page.dart`、`lib/src/views/trainer/monitor/widgets/free_training_data_panel.dart`。（调整）
+- 修改点：记录页列表卡片右上角新增可点击提示图标，并为自由训练卡片补充点击进入详情页；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录列表计时训练卡片的时间行右侧追加计划设置与总时长信息；更新 `lib/src/views/record/widgets/record_card.dart`。（调整）
+- 修改点：记录卡片统计指标区域改为根据可用宽度自适应列宽与列数；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录卡片统计指标区域的列间距改为自动填充剩余宽度；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录卡片统计指标区域使用 Spacer 均分列间距；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录卡片统计指标列宽计算补充 double 转换以修复类型错误；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（修复）
+- 修改点：记录卡片统计指标固定每行3个，并使用 Spacer 自动均分列间距；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录卡片统计指标列宽不再使用 96 上限，改为按可用宽度等分；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录卡片统计指标文字居中，列宽改为自适应子元素宽度并均匀分布；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
+- 修改点：记录列表卡片支持长按删除，确认后调用对应 provider 移除记录；更新 `lib/src/views/record/history_page.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（功能）

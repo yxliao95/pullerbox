@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/free_training_record.dart';
+import '../../models/metric_definitions.dart';
+import '../../providers/metric_visibility_provider.dart';
 import 'record_formatters.dart';
 
-class FreeTrainingRecordDetailPage extends StatelessWidget {
+class FreeTrainingRecordDetailPage extends ConsumerWidget {
   const FreeTrainingRecordDetailPage({required this.record, super.key});
 
   final FreeTrainingRecord record;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visibility = ref.watch(metricVisibilityProvider);
+    final detailDefinitions = freeSummaryMetricDefinitions
+        .where((definition) => visibility.freeVisibility(definition.metric).showInDetail)
+        .toList();
     return Scaffold(
       appBar: AppBar(title: const Text('自由训练记录')),
       body: ListView(
@@ -22,22 +29,32 @@ class FreeTrainingRecordDetailPage extends StatelessWidget {
             style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E8E)),
           ),
           const SizedBox(height: 16),
-          _detailRow('总时长', _formatSeconds(record.totalSeconds)),
-          const SizedBox(height: 8),
-          _detailRow('最大控制力量', _formatKg(record.controlMaxValue)),
-          const SizedBox(height: 8),
-          _detailRow('最长连续控制', _formatSeconds(record.longestControlTimeSeconds)),
-          const SizedBox(height: 8),
-          _detailRow('1s均值', _formatKg(record.currentWindowMeanValue)),
-          const SizedBox(height: 8),
-          _detailRow('1s变化', _formatKg(record.currentWindowDeltaValue)),
-          const SizedBox(height: 8),
-          _detailRow('1s最大增长', _formatKg(record.deltaMaxValue)),
-          const SizedBox(height: 8),
-          _detailRow('1s最大下降', _formatKg(record.deltaMinValue)),
+          for (final definition in detailDefinitions) ...<Widget>[
+            _detailRow(definition.label, _metricValue(definition.metric)),
+            const SizedBox(height: 8),
+          ],
         ],
       ),
     );
+  }
+
+  String _metricValue(FreeSummaryMetric metric) {
+    switch (metric) {
+      case FreeSummaryMetric.totalDuration:
+        return _formatSeconds(record.totalSeconds);
+      case FreeSummaryMetric.controlMax:
+        return _formatKg(record.controlMaxValue);
+      case FreeSummaryMetric.longestControl:
+        return _formatSeconds(record.longestControlTimeSeconds);
+      case FreeSummaryMetric.windowMean:
+        return _formatKg(record.currentWindowMeanValue);
+      case FreeSummaryMetric.windowDelta:
+        return _formatKg(record.currentWindowDeltaValue);
+      case FreeSummaryMetric.deltaMax:
+        return _formatKg(record.deltaMaxValue);
+      case FreeSummaryMetric.deltaMin:
+        return _formatKg(record.deltaMinValue);
+    }
   }
 
   Widget _detailRow(String label, String value) {

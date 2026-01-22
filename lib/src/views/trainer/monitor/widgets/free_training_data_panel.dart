@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../models/metric_definitions.dart';
 import 'free_training_panel_widgets.dart';
 
 class FreeTrainingDataPanel extends StatelessWidget {
@@ -79,13 +80,34 @@ class FreeTrainingDataPanel extends StatelessWidget {
                 child: SingleChildScrollView(
                   child: PanelGrid(
                     entries: <PanelEntry>[
-                      PanelEntry('最大控制力量', _formatKgNullable(controlMaxValue)),
-                      PanelEntry('最长连续控制', _formatSecondsNullable(longestControlTimeSeconds)),
-                      PanelEntry('1s均值', _formatKgNullable(currentWindowMeanValue)),
-                      PanelEntry('1s变化', _formatKgNullable(currentWindowDeltaValue)),
-                      PanelEntry('1s最大增长', _formatKgNullable(deltaMaxValue)),
-                      PanelEntry('1s最大下降', _formatKgNullable(deltaMinValue)),
-                      PanelEntry('总时长', _formatSeconds(totalSeconds)),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.controlMax]?.label ?? '最大控制力量',
+                        _formatKgNullable(controlMaxValue),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.longestControl]?.label ?? '最长连续控制',
+                        _formatSecondsNullable(longestControlTimeSeconds),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.windowMean]?.label ?? '1s均值',
+                        _formatKgNullable(currentWindowMeanValue),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.windowDelta]?.label ?? '1s变化',
+                        _formatKgNullable(currentWindowDeltaValue),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.deltaMax]?.label ?? '1s最大增长',
+                        _formatKgNullable(deltaMaxValue),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.deltaMin]?.label ?? '1s最大下降',
+                        _formatKgNullable(deltaMinValue),
+                      ),
+                      PanelEntry(
+                        freeSummaryMetricDefinitionMap[FreeSummaryMetric.totalDuration]?.label ?? '总时长',
+                        _formatSeconds(totalSeconds),
+                      ),
                     ],
                     isSingleColumn: isLandscape,
                   ),
@@ -143,29 +165,71 @@ class FreeTrainingDataPanel extends StatelessWidget {
 
   String _formatSecondsNullable(double? value) => value == null ? '--' : '${value.toStringAsFixed(1)} 秒';
   Future<void> _showMetricHelp(BuildContext context) {
+    const metricsOrder = <FreeSummaryMetric>[
+      FreeSummaryMetric.controlMax,
+      FreeSummaryMetric.longestControl,
+      FreeSummaryMetric.windowMean,
+      FreeSummaryMetric.windowDelta,
+      FreeSummaryMetric.deltaMax,
+      FreeSummaryMetric.deltaMin,
+      FreeSummaryMetric.totalDuration,
+    ];
+    final guideMetricDefinitions = <MetricGuideDefinition>[
+      for (final metric in metricsOrder)
+        MetricGuideDefinition(
+          label: freeSummaryMetricDefinitionMap[metric]?.label ?? '指标',
+          description: freeSummaryMetricDefinitionMap[metric]?.description ?? '',
+        ),
+    ];
+    final guideDefinitions = freeGuideSupplementDefinitions;
     return showDialog<void>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (context) {
+        final hasDefinitions = guideDefinitions.isNotEmpty;
+        final hasMetrics = guideMetricDefinitions.isNotEmpty;
+        final showMetricsTitle = hasDefinitions && hasMetrics;
         return AlertDialog(
           title: const Text('指标说明'),
-          content: const SingleChildScrollView(
+          content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                FreeTrainingHelpItem(label: '最大控制力量', description: '达到力量峰值 95% 以上区间的中位数。'),
-                FreeTrainingHelpItem(label: '最长连续控制', description: '力量连续不低于最大控制力量 95% 的最长时长。'),
-                FreeTrainingHelpItem(label: '1s均值', description: '最近一个完整 1 秒窗口的平均力量。'),
-                FreeTrainingHelpItem(label: '1s变化', description: '当前 1 秒均值减去上一个 1 秒均值。'),
-                FreeTrainingHelpItem(label: '1s最大上升', description: '所有 1 秒变化中的最大上升值。'),
-                FreeTrainingHelpItem(label: '1s最大下降', description: '所有 1 秒变化中的最大下降值。'),
-                FreeTrainingHelpItem(label: '总时长', description: '本次自由训练累计时长。'),
+                if (hasDefinitions) ...<Widget>[
+                  const _MetricGuideSectionTitle(title: '定义'),
+                  const SizedBox(height: 8),
+                  for (final definition in guideDefinitions)
+                    FreeTrainingHelpItem(label: definition.label, description: definition.description),
+                ],
+                if (hasDefinitions && hasMetrics) const SizedBox(height: 6),
+                if (hasMetrics) ...<Widget>[
+                  if (showMetricsTitle) ...<Widget>[
+                    const _MetricGuideSectionTitle(title: '指标'),
+                    const SizedBox(height: 8),
+                  ],
+                  for (final definition in guideMetricDefinitions)
+                    FreeTrainingHelpItem(label: definition.label, description: definition.description),
+                ],
               ],
             ),
           ),
           actions: <Widget>[TextButton(onPressed: Navigator.of(context).pop, child: const Text('知道了'))],
         );
       },
+    );
+  }
+}
+
+class _MetricGuideSectionTitle extends StatelessWidget {
+  const _MetricGuideSectionTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.blueAccent),
     );
   }
 }

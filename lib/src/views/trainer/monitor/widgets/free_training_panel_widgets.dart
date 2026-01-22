@@ -91,18 +91,14 @@ class FreeTrainingHelpItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
-          children: <TextSpan>[
-            TextSpan(
-              text: '$label：',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            TextSpan(text: description),
-          ],
-        ),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(description, style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E8E))),
+        ],
       ),
     );
   }
