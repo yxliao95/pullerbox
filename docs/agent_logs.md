@@ -241,3 +241,13 @@
 - 修复监控相关视图中 ValueListenable 未识别问题，补充 foundation 导入（监控视图/图表/自由训练相关组件）。
 - 补充规范：使用 `ValueListenable/ValueListenableBuilder` 时需显式引入 `package:flutter/foundation.dart`，避免类型未识别。
 - 修复监控图表绘制文件尾部多余括号导致的语法错误，并补充统计模型导入以消除 TrainingStatistics 未识别报错。
+- 新增训练统计计算器的单元测试，覆盖空数据与疲劳判定场景，影响 services 与 models。
+- 新增训练记录与统计的序列化回归测试，影响 models，未涉及数据结构变更。
+- 按测试规范重建 test 目录结构，新增 helpers/fake storages，影响 tests。
+- 补齐 models 单元测试（训练计划、自由训练记录、训练记录时区/序列化），影响 models。
+- 补齐 services 单元测试（记录/计划存储与统计计算器），影响 services。
+- 补齐 providers 主流程测试（计划、记录、监控状态机），影响 providers。
+- 修复测试中 Override 类型提示与局部函数命名告警，影响 providers 单元测试。
+- 新增测试依赖 fake_async 并修正 storage 测试的命名告警，影响 tests 与 pubspec。
+- 修复训练计划与训练记录 storage 测试的命名告警，影响 services 单元测试。
+- 修复 TrainingMonitorController 单测自动销毁导致的状态流转失败，影响 providers 单元测试。

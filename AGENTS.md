@@ -1,188 +1,207 @@
 # AGENTS.md
 
-用于连接蓝牙拉力计的训练应用，功能包括：蓝牙连接与实时读数显示、计时器训练、训练计划管理、历史数据记录。当前阶段不接入真实设备，统一用模拟数据驱动开发与测试，后续可无痛替换为真实蓝牙实现。
+## 1. Agent 的角色与总体原则
 
-## 1. 技术栈与约束
+总体原则：
 
-* Flutter 2.0 及以上版本
-* Riverpod 3.x 作为状态管理
-* Dart null safety
-* 当前数据源：Fake services 模拟（后续替换为真实蓝牙与持久化存储）
+* 可以根据需要调整代码结构、抽象与组织方式
+* 不得引入功能回退或业务语义变化
+* 不得破坏既有架构约束、测试假设与数据模拟契约
+* 所有重要修改必须可解释、可验证、可追踪
 
-## 2. 项目结构与单向依赖
+---
+
+## 2. 规范遵循
+
+Agent 在任何情况下都必须遵循以下规范文档：
 
 ```text
-lib/
-├── main.dart
-├── src/models/       // 纯数据模型，序列化/反序列化与校验
-├── src/services/     // 数据源：fake/bluetooth/storage 等
-├── src/providers/    // 状态管理与业务编排，把 services 组织成 UI 可消费的状态
-├── src/views/        // 页面与组件（只做展示与交互）
-├── src/routing/      // 路由与导航（如果页面数开始增长就启用）
-├── src/theme/        // 主题、间距、字号、颜色（建议尽早抽出来）
-└── src/utils/        // 通用工具（严格控制规模）
+docs/regulations/Architecture.md（架构规范）
+docs/regulations/Testing.md（测试规范）
+docs/regulations/DataSimulation.md（数据模拟规范）
 ```
 
-推荐单向依赖关系：views → providers → services → models
+具体要求包括但不限于：
 
-禁止或应避免：
+* 严格保持单向依赖关系
 
-* services 依赖 providers
-* models 依赖 services / providers
-* views 直接调用 services
-* views 直接进行持久化写入或蓝牙操作
+```text
+views → providers → services → models
+```
 
-允许的例外（必须写清原因）：
+* providers 作为唯一业务真相来源
+* views 不包含业务逻辑或副作用
+* Fake service 与真实 service 保持接口一致
+* 所有时间、随机性与异步行为可控、可测试
 
-* utils 可被任意层引用，但不得反向引入业务层类型（避免 utils 变成垃圾桶）
+---
 
-## 3. 分层职责边界
+## 3. 重构策略
 
-### 3.1 models 层
+### 3.1 重构总体授权
 
-* 只放“值对象”和“业务枚举”，不包含 IO、插件调用、Riverpod 引用
-* 模型必须可序列化（即使当前阶段不落盘，也要为历史记录做准备）
-* 对外暴露的字段尽量不可变（final），必要时提供 copyWith
-* 时间统一使用 UTC 或明确记录时区（训练记录会跨设备同步的话尤为重要）
+Agent **被允许**在以下场景下进行重构：
 
-### 3.2 services 层
+* 改善代码结构、可读性或可维护性
+* 消除技术债务
+* 统一或简化抽象
+* 为后续功能或真实硬件接入做准备
+* 对齐规范文档中的最佳实践
 
-* 面向“数据源”和“副作用”，例如：
+---
 
-  * FakeForceMeterService：生成模拟力数据流
-  * BluetoothForceMeterService：未来真实设备实现
-  * HistoryStorageService：历史记录读写（未来）
-* services 对外只暴露抽象接口或最小 API，避免泄漏实现细节
-* 所有流式数据必须提供取消订阅与释放资源的机制（避免后台还在跑）
+### 3.2 重构的硬性前提
 
-### 3.3 providers 层
+无论重构规模大小，必须同时满足：
 
-* 负责业务编排与状态整形：
+1. **功能不变**
 
-  * 把 services 的 stream 转成 UI 需要的状态对象
-  * 组合多个数据源（例如：训练计时器状态 + 实时力数据 + 训练计划）
-* provider 不做 UI 细节，不直接依赖 BuildContext
-* provider 状态必须可预测：同输入同输出，副作用在 services
+   * 对用户可见行为不变
+   * 业务语义不变
+   * 状态机转移语义不变
+   * 指标计算结果在同等输入下保持一致
 
-### 3.4 views 层
+2. **测试可验证**
 
-* 只做：展示、交互事件分发、简单的本地 UI 状态（例如 Tab index、滚动位置）
-* 禁止：复杂业务逻辑、直接读写存储、直接操作蓝牙
-* 大组件拆分：页面文件只保留页面骨架与布局，细组件下沉到 widgets/
+   * 所有既有测试必须通过
+   * 若测试无法覆盖变更点，必须补充测试
+   * 不允许通过删除或弱化测试来“适配”重构
 
-## 4. 命名与文件组织
+3. **架构仍然成立**
 
-### 4.1 命名约定
+   * 分层结构清晰
+   * 依赖方向不被破坏
+   * provider 仍为业务中心
 
-* 文件名：snake_case
-* 类名：UpperCamelCase
-* 变量与方法：lowerCamelCase
-* 私有标识：使用单个下划线 `_`，避免多重下划线
-* provider 命名建议：
+---
 
-  * `xxxServiceProvider`（提供 service 实例）
-  * `xxxControllerProvider`（业务控制器/状态机）
-  * `xxxStateProvider`（纯状态，能不用就不用）
-  * `xxxStreamProvider`（数据流）
+### 3.3 不允许的行为
 
-### 4.2 页面与组件拆分规则
+Agent 不得：
 
-* 页面目录建议：
+* 改变业务含义却未在日志中明确说明
+* 引入无法测试的逻辑
+* 使用真实时间、真实随机性作为逻辑前提
+* 让 Fake 行为与真实实现语义分叉
+* 通过“更优雅”为理由引入隐式或难以理解的逻辑
 
-  * `src/views/pages/`
-  * `src/views/widgets/`
-  * `src/views/components/`（可选，放复用组件）
-* 每个页面至少拆出：
+---
 
-  * `Page`（页面壳）
-  * `View`（主体布局）
-  * `Widgets`（可复用块）
+## 4. 测试要求
 
-## 5. 状态管理与 Riverpod 使用规范（3.x）
+Agent 必须遵循测试规范中的全部要求，重点包括：
 
-### 5.1 基本规则
+* 新增 provider 必须有测试
+* 状态机、指标逻辑变更必须更新测试
+* 使用 `ProviderContainer` 测试 providers
+* 时间推进使用 fake_async 或 clock abstraction
+* 禁止依赖真实时间流逝
 
-* UI 读状态用 `ref.watch`
-* 触发动作用 `ref.read(xxxProvider.notifier).action()` 或 controller 暴露方法
-* 避免在 build 中写入状态（会导致循环重建）
+测试的目标是**锁死行为语义，而不是追求覆盖率**。
 
-### 5.2 AsyncValue 处理
+---
 
-* Riverpod 3 移除 `valueOrNull`，统一用 `asData?.value`
-* UI 必须对 `loading/error/data` 三态显式处理，禁止直接 `.value!`
-* 错误必须在 provider 内转换成可读的 error 类型或 message，UI 不做异常解析
+## 5. 数据模拟要求
 
-### 5.3 生命周期与资源释放
+Fake / 模拟数据是项目的一等公民，必须满足：
 
-* 涉及 stream/timer 的 provider 必须 `autoDispose`，并在 dispose 时清理资源
-* 长连接（未来蓝牙）要有“显式连接/断开”动作，不靠隐式 watch
+* 可配置采样频率、噪声、范围、模式
+* 支持固定随机种子
+* 使用统一时间源
+* 生命周期行为明确（start / pause / dispose）
 
-### 5.4 Dropdown 组件约定
+任何重构不得破坏：
 
-* `DropdownButtonFormField` 避免 `value + onChanged` 的旧组合，使用 `initialValue`
-* 状态更新通过 controller 方法或 provider notifier 统一入口，避免在 widget 内散落 setState
+* 可复现性
+* 与真实 service 的可替换性
+* provider 对数据的假设
 
-## 6. 训练域模型与状态机约束
+---
 
-为了后续支持“计时器训练 + 自由训练 + 历史记录”，建议尽早明确状态机边界：
+## 6. 日志与变更记录（强制）
 
-* 训练会话（Session）必须有：
+### 6.1 日志位置
 
-  * sessionId
-  * startTime, endTime
-  * samplingConfig（采样频率、窗口大小、是否模拟等）
-  * metrics（最大力、控制时间、窗口统计等）
-  * rawSamples 可选（初期可不存，后期再加）
-* 训练状态机最少包含：
+**每一次代码更新都必须追加记录到：**
 
-  * idle
-  * preparing（倒计时/校准）
-  * running
-  * paused
-  * finished
-* 状态转换只能发生在 provider/controller 内，UI 只能发送事件
+```text
+docs/agent_logs.md
+```
 
-## 7. 数据模拟规范（当前阶段重点）
+不得覆盖、不得删除历史记录。
 
-* Fake 数据源必须可配置：
+---
 
-  * 采样频率（Hz）
-  * 噪声强度
-  * 最大力范围
-  * 力曲线模式（例如线性上升、阶梯、随机游走）
-* 必须支持“可复现模式”：
+### 6.2 日志语言
 
-  * 固定随机种子，保证测试稳定
-* 模拟数据的“时间基准”必须来自同一处（避免 timer 与 stream 时间漂移）
+* **必须使用中文**
+* 表达清晰、具体、可追溯
+* 避免只写“重构”“优化”等模糊描述
 
-## 8. 测试与质量门槛（建议最低要求）
+---
 
-* providers 层必须可单测：
+### 6.3 日志内容（至少包含）
 
-  * 输入事件，断言状态与关键指标输出
-* services 层至少有基础测试或可注入 fake clock/random
-* 禁止在核心路径引入难测的单例与全局状态
+每次记录至少包含以下部分：
 
-最低门槛（每次合并前）：
+* **修改点**
 
-* `flutter analyze` 无 error
-* 关键业务 provider 的单测至少覆盖 1 条主流程
+  * 修改了哪些模块 / 文件
+  * 属于重构、修复还是结构调整
 
-## 9. 日志与变更记录
+* **影响范围**
 
-* 每次更新完成后，必须把修改内容以列表形式追加到 `docs/agent_logs.md` 文档末尾，使用中文
-* 日志至少包含：
+  * 涉及的层级（models / services / providers / views）
+  * 是否影响状态机、指标或数据流
 
-  * 修改点
-  * 影响范围（页面/模块）
-  * 是否涉及数据结构变化（如有必须注明迁移方式）
+* **数据结构变更与迁移方式**
 
-## 10. 代码风格补充
+  * 是否修改了 model 或 state 结构
+  * 旧结构如何映射到新结构
+  * 是否需要兼容或迁移逻辑
 
-* 优先使用组合而非继承
-* 统一错误处理策略：不要把异常直接抛到 UI
-* 避免过早抽象，但对“未来必替换”的模块（蓝牙、存储）必须先抽接口
+---
 
-## 11. 常见问题补充
+## 7. 常见问题与约定补充
 
-* 使用 `ValueListenable/ValueListenableBuilder` 时必须显式引入 `package:flutter/foundation.dart`（避免未识别类型）
+### 7.1 Riverpod 3 相关
+
+* Riverpod 3 已移除 `valueOrNull`
+* 统一使用：
+
+```dart
+asyncValue.asData?.value
+```
+
+* 禁止使用 `.value!` 绕过状态判断
+
+---
+
+### 7.2 ValueListenable 相关
+
+在使用：
+
+* `ValueListenable`
+* `ValueListenableBuilder`
+
+时，**必须显式引入**：
+
+```dart
+import 'package:flutter/foundation.dart';
+```
+
+避免因隐式依赖导致类型无法识别或行为不一致。
+
+---
+
+## 8. Agent 自检要求
+
+在提交任何代码前，Agent 必须自问并确认：
+
+* 功能是否与重构前一致？
+* 测试是否能捕获潜在回退？
+* provider 是否仍是唯一业务真相？
+* Fake 与真实实现是否仍然等价？
+* 变更是否已完整记录在日志中？
+
+若任一问题无法肯定回答，必须先修正。
