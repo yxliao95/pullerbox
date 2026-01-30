@@ -29,14 +29,6 @@ class TrainingComparePage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       children: <Widget>[
-        _DateRangeCard(
-          startDate: filter.startDate,
-          endDate: filter.endDate,
-          onStartTap: () => _pickStartDate(context, ref),
-          onEndTap: () => _pickEndDate(context, ref),
-          onReset: () => ref.read(trainingCompareFilterProvider.notifier).resetRecentMonths(),
-        ),
-        const SizedBox(height: 16),
         Row(
           children: <Widget>[
             Expanded(
@@ -71,6 +63,13 @@ class TrainingComparePage extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        _DateRangeCard(
+          startDate: filter.startDate,
+          endDate: filter.endDate,
+          onStartTap: () => _pickStartDate(context, ref),
+          onEndTap: () => _pickEndDate(context, ref),
         ),
         const SizedBox(height: 16),
         _MetricSwitchButton(
@@ -121,14 +120,12 @@ class _DateRangeCard extends StatelessWidget {
     required this.endDate,
     required this.onStartTap,
     required this.onEndTap,
-    required this.onReset,
   });
 
   final DateTime startDate;
   final DateTime endDate;
   final VoidCallback onStartTap;
   final VoidCallback onEndTap;
-  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -139,12 +136,12 @@ class _DateRangeCard extends StatelessWidget {
         boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x14000000), blurRadius: 10, offset: Offset(0, 4))],
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text('时间范围', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+            const Text('时间范围', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
             Row(
               children: <Widget>[
                 Expanded(
@@ -158,11 +155,6 @@ class _DateRangeCard extends StatelessWidget {
                   child: _DateButton(label: _formatDate(endDate), onTap: onEndTap),
                 ),
               ],
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(onPressed: onReset, child: const Text('最近三个月')),
             ),
           ],
         ),
@@ -184,10 +176,10 @@ class _DateButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFF2F7BEA),
         side: const BorderSide(color: Color(0xFF2F7BEA)),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -213,12 +205,11 @@ class _PlanIndicatorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayMax = stats.maxValue;
     final displayMin = stats.minValue;
-    final displayLast = stats.lastValue;
     final hasPlan = planName != null && planName!.isNotEmpty;
-    final hasData = displayMax != null || displayMin != null || displayLast != null;
-    final maxLabel = _formatMetricValue(metric, displayMax);
-    final minLabel = _formatMetricValue(metric, displayMin);
-    final lastLabel = _formatMetricValue(metric, displayLast);
+    final hasData = displayMax != null || displayMin != null;
+    final maxLabel = 'Max: ${_formatMetricValue(metric, displayMax)}';
+    final minLabel = 'Min: ${_formatMetricValue(metric, displayMin)}';
+    final intermediateValues = _filterIntermediateValues(stats.values, displayMax, displayMin);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -233,32 +224,28 @@ class _PlanIndicatorCard extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      hasPlan ? planName! : title,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      hasPlan ? planName! : '未选择计划',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    hasPlan ? '更换' : '选择',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF2F7BEA), fontWeight: FontWeight.w600),
-                  ),
+                  const Icon(Icons.swap_horiz, size: 16, color: Color(0xFF2F7BEA)),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               SizedBox(
                 height: 300,
                 child: _IndicatorBar(
                   maxValue: displayMax,
                   minValue: displayMin,
-                  lastValue: displayLast,
+                  intermediateValues: intermediateValues,
                   scaleRange: scaleRange,
                   metric: metric,
                   isEmpty: !hasData,
                   maxLabel: maxLabel,
                   minLabel: minLabel,
-                  lastLabel: lastLabel,
                 ),
               ),
             ],
@@ -273,24 +260,22 @@ class _IndicatorBar extends StatelessWidget {
   const _IndicatorBar({
     required this.maxValue,
     required this.minValue,
-    required this.lastValue,
+    required this.intermediateValues,
     required this.scaleRange,
     required this.metric,
     required this.isEmpty,
     required this.maxLabel,
     required this.minLabel,
-    required this.lastLabel,
   });
 
   final double? maxValue;
   final double? minValue;
-  final double? lastValue;
+  final List<double> intermediateValues;
   final _ScaleRange scaleRange;
   final TimedSummaryMetric metric;
   final bool isEmpty;
   final String maxLabel;
   final String minLabel;
-  final String lastLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -299,120 +284,114 @@ class _IndicatorBar extends StatelessWidget {
     final normalizedRange = range <= 0 ? 1.0 : range;
     final maxHeight = (((maxValue ?? 0) - scaleRange.min) / normalizedRange).clamp(0.0, 1.0) * barHeight;
     final minHeight = (((minValue ?? 0) - scaleRange.min) / normalizedRange).clamp(0.0, 1.0) * barHeight;
-    final lastHeight = (((lastValue ?? 0) - scaleRange.min) / normalizedRange).clamp(0.0, 1.0) * barHeight;
     const labelAboveOffset = 6.0;
     const labelBelowOffset = 18.0;
+    const indicatorColor = Color(0xFF2F7BEA);
+    const dotColor = Color(0x802F7BEA);
     final labelPositions = _resolveLabelPositions(
       maxPos: maxHeight + labelAboveOffset,
       minPos: minHeight - labelBelowOffset,
-      lastPos: lastHeight + labelAboveOffset,
       barHeight: barHeight,
     );
-    return Stack(
-      alignment: Alignment.bottomCenter,
-      children: <Widget>[
-        Container(
-          height: barHeight,
-          decoration: BoxDecoration(color: const Color.fromARGB(30, 0, 0, 0)),
-        ),
-        if (!isEmpty && maxValue != null && minValue != null)
-          Positioned(
-            bottom: math.min(minHeight, maxHeight),
-            left: 0,
-            right: 0,
-            child: Container(
-              height: (maxHeight - minHeight).abs().clamp(2.0, barHeight),
-              color: const Color(0x4D2F7BEA),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dotPositions = _buildIntermediateDotPositions(
+          values: intermediateValues,
+          scaleRange: scaleRange,
+          normalizedRange: normalizedRange,
+          barHeight: barHeight,
+          maxWidth: constraints.maxWidth,
+        );
+        return Stack(
+          alignment: Alignment.bottomCenter,
+          children: <Widget>[
+            Container(
+              height: barHeight,
+              decoration: BoxDecoration(color: const Color.fromARGB(30, 0, 0, 0)),
             ),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: maxHeight,
-            left: 0,
-            right: 0,
-            child: const Divider(color: Color(0xFF000000), thickness: 2, height: 2),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: labelPositions.maxPos,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                maxLabel,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF000000), fontWeight: FontWeight.w600),
+            if (!isEmpty && maxValue != null && minValue != null)
+              Positioned(
+                bottom: math.min(minHeight, maxHeight),
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: (maxHeight - minHeight).abs().clamp(2.0, barHeight),
+                  color: const Color(0x4D2F7BEA),
+                ),
               ),
-            ),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: minHeight,
-            left: 0,
-            right: 0,
-            child: const Divider(color: Color(0xFFFFFFFF), thickness: 2, height: 2),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: labelPositions.minPos,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                minLabel,
-                style: const TextStyle(fontSize: 11, color: Color(0xFFFFFFFF), fontWeight: FontWeight.w600),
+            if (!isEmpty)
+              for (final dot in dotPositions)
+                Positioned(
+                  bottom: dot.bottom,
+                  left: dot.left,
+                  child: Container(
+                    width: dot.size,
+                    height: dot.size,
+                    decoration: const BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                  ),
+                ),
+            if (!isEmpty)
+              Positioned(
+                bottom: maxHeight,
+                left: 0,
+                right: 0,
+                child: Divider(color: indicatorColor, thickness: 2, height: 2),
               ),
-            ),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: lastHeight,
-            left: 0,
-            right: 0,
-            child: const Divider(color: Color(0xFF2F7BEA), thickness: 2, height: 2),
-          ),
-        if (!isEmpty)
-          Positioned(
-            bottom: labelPositions.lastPos,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                lastLabel,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF2F7BEA), fontWeight: FontWeight.w600),
+            if (!isEmpty)
+              Positioned(
+                bottom: labelPositions.maxPos,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Text(
+                    maxLabel,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF000000), fontWeight: FontWeight.w600),
+                  ),
+                ),
               ),
-            ),
-          ),
-        if (isEmpty)
-          const Center(
-            child: Text('暂无数据', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-          ),
-      ],
+            if (!isEmpty)
+              Positioned(
+                bottom: minHeight,
+                left: 0,
+                right: 0,
+                child: Divider(color: indicatorColor, thickness: 2, height: 2),
+              ),
+            if (!isEmpty)
+              Positioned(
+                bottom: labelPositions.minPos,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Text(
+                    minLabel,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF000000), fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            if (isEmpty)
+              const Center(
+                child: Text('暂无数据', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _LabelPositions {
-  const _LabelPositions({required this.maxPos, required this.minPos, required this.lastPos});
+  const _LabelPositions({required this.maxPos, required this.minPos});
 
   final double maxPos;
   final double minPos;
-  final double lastPos;
 }
 
-_LabelPositions _resolveLabelPositions({
-  required double maxPos,
-  required double minPos,
-  required double lastPos,
-  required double barHeight,
-}) {
+_LabelPositions _resolveLabelPositions({required double maxPos, required double minPos, required double barHeight}) {
   const minGap = 16.0;
   const topInset = 4.0;
   const bottomInset = 4.0;
-  final entries = <_LabelEntry>[
-    _LabelEntry(key: 'max', pos: maxPos),
-    _LabelEntry(key: 'min', pos: minPos),
-    _LabelEntry(key: 'last', pos: lastPos),
-  ]..sort((a, b) => a.pos.compareTo(b.pos));
+  final entries = <_LabelEntry>[_LabelEntry(key: 'max', pos: maxPos), _LabelEntry(key: 'min', pos: minPos)]
+    ..sort((a, b) => a.pos.compareTo(b.pos));
 
   for (int index = 1; index < entries.length; index++) {
     final prev = entries[index - 1];
@@ -444,7 +423,6 @@ _LabelPositions _resolveLabelPositions({
   return _LabelPositions(
     maxPos: resolved('max').clamp(bottomInset, barHeight - topInset),
     minPos: resolved('min').clamp(bottomInset, barHeight - topInset),
-    lastPos: resolved('last').clamp(bottomInset, barHeight - topInset),
   );
 }
 
@@ -455,6 +433,58 @@ class _LabelEntry {
   double pos;
 }
 
+List<double> _filterIntermediateValues(List<double> values, double? maxValue, double? minValue) {
+  const epsilon = 1e-6;
+  return values.where((value) => value.isFinite).where((value) {
+    final isMax = maxValue != null && (value - maxValue).abs() <= epsilon;
+    final isMin = minValue != null && (value - minValue).abs() <= epsilon;
+    return !isMax && !isMin;
+  }).toList();
+}
+
+class _DotPosition {
+  const _DotPosition({required this.left, required this.bottom, required this.size});
+
+  final double left;
+  final double bottom;
+  final double size;
+}
+
+List<_DotPosition> _buildIntermediateDotPositions({
+  required List<double> values,
+  required _ScaleRange scaleRange,
+  required double normalizedRange,
+  required double barHeight,
+  required double maxWidth,
+}) {
+  const dotSize = 3.0;
+  const horizontalPadding = 8.0;
+  final availableWidth = math.max(0.0, maxWidth - horizontalPadding * 2);
+  final grouped = <double, List<double>>{};
+  for (final value in values) {
+    grouped.putIfAbsent(value, () => <double>[]).add(value);
+  }
+  final positions = <_DotPosition>[];
+  for (final entry in grouped.entries) {
+    final value = entry.key;
+    final count = entry.value.length;
+    final bottom = (((value - scaleRange.min) / normalizedRange).clamp(0.0, 1.0) * barHeight);
+    if (count <= 1) {
+      final left = horizontalPadding + (availableWidth - dotSize) / 2;
+      positions.add(_DotPosition(left: left, bottom: bottom - dotSize / 2, size: dotSize));
+      continue;
+    }
+    final span = math.min(availableWidth, (count - 1) * (dotSize + 4));
+    final start = horizontalPadding + (availableWidth - span) / 2;
+    final step = count > 1 ? span / (count - 1) : 0.0;
+    for (int index = 0; index < count; index++) {
+      final left = start + step * index;
+      positions.add(_DotPosition(left: left, bottom: bottom - dotSize / 2, size: dotSize));
+    }
+  }
+  return positions;
+}
+
 class _MetricSwitchButton extends StatelessWidget {
   const _MetricSwitchButton({required this.label, required this.onTap});
 
@@ -463,17 +493,47 @@ class _MetricSwitchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF2F7BEA),
-          side: const BorderSide(color: Color(0xFF2F7BEA)),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x14000000), blurRadius: 10, offset: Offset(0, 4))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('指标', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onTap,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2F7BEA),
+                  side: const BorderSide(color: Color(0xFF2F7BEA)),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.arrow_drop_down, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-        child: Text('指标：$label', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -562,14 +622,6 @@ String _formatDate(DateTime date) {
   return '$year-$month-$day';
 }
 
-double _resolveScaleMax({
-  required double? maxValue,
-  required double? minValue,
-  required double? lastValue,
-}) {
-  return _resolveScaleRangeFromValues(<double?>[maxValue, minValue, lastValue]).max;
-}
-
 _ScaleRange _resolveScaleRangeFromValues(List<double?> candidates) {
   final values = candidates.whereType<double>().where((value) => value.isFinite && value >= 0).toList();
   if (values.isEmpty) {
@@ -588,8 +640,7 @@ _ScaleRange _resolveScaleRangeFromValues(List<double?> candidates) {
   }
   var scaleMin = 0.0;
   for (var index = 0; index < 2; index++) {
-    final maxConstraint =
-        scaleMin + (resolvedMax - scaleMin) / (desiredMaxPos == 0 ? 1 : desiredMaxPos);
+    final maxConstraint = scaleMin + (resolvedMax - scaleMin) / (desiredMaxPos == 0 ? 1 : desiredMaxPos);
     scaleMax = math.max(scaleMax, maxConstraint);
     scaleMax = (scaleMax / minStep).ceil() * minStep;
     scaleMax = math.max(minStep, scaleMax);

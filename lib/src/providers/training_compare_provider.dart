@@ -91,6 +91,7 @@ class TrainingCompareMetricStats {
     required this.lastValue,
     required this.lastDate,
     required this.recordCount,
+    required this.values,
   });
 
   const TrainingCompareMetricStats.empty()
@@ -98,13 +99,15 @@ class TrainingCompareMetricStats {
         minValue = null,
         lastValue = null,
         lastDate = null,
-        recordCount = 0;
+        recordCount = 0,
+        values = const <double>[];
 
   final double? maxValue;
   final double? minValue;
   final double? lastValue;
   final DateTime? lastDate;
   final int recordCount;
+  final List<double> values;
 }
 
 class TrainingCompareResult {
@@ -194,6 +197,7 @@ TrainingCompareMetricStats _buildMetricStats(
     lastValue: lastValue,
     lastDate: lastRecord.startedAt,
     recordCount: matched.length,
+    values: values,
   );
 }
 
