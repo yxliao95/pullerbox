@@ -251,6 +251,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     if (picked == null) {
       return;
     }
+    if (!context.mounted) {
+      return;
+    }
     final shouldBuild = await _showConfirmDialog(
       context,
       title: '构造记录',
