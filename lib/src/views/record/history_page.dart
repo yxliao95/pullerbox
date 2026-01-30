@@ -7,6 +7,7 @@ import '../../models/training_record.dart';
 import '../../providers/free_training_record_provider.dart';
 import '../../providers/metric_visibility_provider.dart';
 import '../../providers/training_record_provider.dart';
+import 'overview_page.dart';
 import 'widgets/free_training_record_card.dart';
 import 'widgets/record_calendar.dart';
 import 'widgets/record_card.dart';
@@ -19,9 +20,7 @@ class HistoryPage extends ConsumerStatefulWidget {
 }
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
-  final Set<RecordTrainingType> _selectedTypes = <RecordTrainingType>{
-    RecordTrainingType.timed,
-  };
+  final Set<RecordTrainingType> _selectedTypes = <RecordTrainingType>{RecordTrainingType.timed};
   final Set<TimedSummaryMetric> _timedSummary = <TimedSummaryMetric>{
     TimedSummaryMetric.maxControlStrength,
     TimedSummaryMetric.fatigueSignal,
@@ -49,11 +48,12 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       const SizedBox(height: 8),
       RecordCalendar(recordDates: recordDates),
       const SizedBox(height: 16),
-      const _SectionTitle(title: '数据总览'),
-      const SizedBox(height: 8),
-      _TimedOverviewChart(records: records),
+      _OverviewEntryButton(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const OverviewPage())),
+      ),
       const SizedBox(height: 16),
     ];
+    const listPadding = EdgeInsets.fromLTRB(16, 16, 16, 120);
     if (records.isEmpty && freeRecords.isEmpty) {
       items.add(
         const Padding(
@@ -66,7 +66,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       return SafeArea(
         top: true,
         bottom: false,
-        child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: items),
+        child: Stack(
+          children: <Widget>[
+            ListView(padding: listPadding, children: items),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: _RecordActionButtons(
+                onClear: () => _handleClearRecords(context),
+                onBuild: () => _handleBuildRecords(context),
+              ),
+            ),
+          ],
+        ),
       );
     }
     items
@@ -76,7 +88,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     return SafeArea(
       top: true,
       bottom: false,
-      child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: items),
+      child: Stack(
+        children: <Widget>[
+          ListView(padding: listPadding, children: items),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: _RecordActionButtons(
+              onClear: () => _handleClearRecords(context),
+              onBuild: () => _handleBuildRecords(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -90,16 +114,10 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final entries = <_RecordEntry>[
       if (includeFree)
         for (final record in freeRecords)
-          _RecordEntry(
-            startedAt: record.startedAt,
-            buildCard: (context) => _buildFreeRecordCard(context, record),
-          ),
+          _RecordEntry(startedAt: record.startedAt, buildCard: (context) => _buildFreeRecordCard(context, record)),
       if (includeTimed)
         for (final record in timedRecords)
-          _RecordEntry(
-            startedAt: record.startedAt,
-            buildCard: (context) => _buildTimedRecordCard(context, record),
-          ),
+          _RecordEntry(startedAt: record.startedAt, buildCard: (context) => _buildTimedRecordCard(context, record)),
     ]..sort((a, b) => b.startedAt.compareTo(a.startedAt));
 
     if (entries.isEmpty) {
@@ -150,11 +168,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   }
 
   Future<void> _confirmDeleteTimedRecord(TrainingRecord record) async {
-    final shouldDelete = await _showDeleteConfirm(
-      context,
-      title: '删除计时训练记录',
-      content: '确定删除该记录吗？此操作不可撤销。',
-    );
+    final shouldDelete = await _showDeleteConfirm(context, title: '删除计时训练记录', content: '确定删除该记录吗？此操作不可撤销。');
     if (!shouldDelete) {
       return;
     }
@@ -162,11 +176,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   }
 
   Future<void> _confirmDeleteFreeRecord(FreeTrainingRecord record) async {
-    final shouldDelete = await _showDeleteConfirm(
-      context,
-      title: '删除自由训练记录',
-      content: '确定删除该记录吗？此操作不可撤销。',
-    );
+    final shouldDelete = await _showDeleteConfirm(context, title: '删除自由训练记录', content: '确定删除该记录吗？此操作不可撤销。');
     if (!shouldDelete) {
       return;
     }
@@ -191,6 +201,67 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     return result ?? false;
   }
 
+  Future<bool> _showConfirmDialog(
+    BuildContext context, {
+    required String title,
+    required String content,
+    String cancelLabel = '取消',
+    String confirmLabel = '确认',
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(cancelLabel)),
+            TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text(confirmLabel)),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Future<void> _handleClearRecords(BuildContext context) async {
+    final shouldClear = await _showDeleteConfirm(
+      context,
+      title: '清空记录',
+      content: '确定清空所有记录吗？此操作不可撤销。',
+    );
+    if (!shouldClear) {
+      return;
+    }
+    ref.read(trainingRecordProvider.notifier).clearAllRecords();
+    ref.read(freeTrainingRecordProvider.notifier).clearAllRecords();
+  }
+
+  Future<void> _handleBuildRecords(BuildContext context) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateUtils.dateOnly(DateTime.now()),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (picked == null) {
+      return;
+    }
+    final shouldBuild = await _showConfirmDialog(
+      context,
+      title: '构造记录',
+      content: '确认构造 ${_formatShortDate(picked)} 的训练记录吗？',
+    );
+    if (!shouldBuild) {
+      return;
+    }
+    ref.read(trainingRecordProvider.notifier).buildRecordsForDate(picked);
+  }
+
   void _openFilterPanel(BuildContext context) {
     final visibility = ref.read(metricVisibilityProvider);
     final timedDefinitions = timedSummaryMetricDefinitions
@@ -212,10 +283,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               child: Container(
                 width: 300,
                 margin: const EdgeInsets.only(left: 24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
                 child: _FilterPanel(
                   selectedTypes: _selectedTypes,
                   timedSummary: _timedSummary,
@@ -286,6 +354,84 @@ class _RecordSectionHeader extends StatelessWidget {
   }
 }
 
+class _OverviewEntryButton extends StatelessWidget {
+  const _OverviewEntryButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF2F7BEA),
+          side: const BorderSide(color: Color(0xFF2F7BEA)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: const Text('可视化数据统计', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
+class _RecordActionButtons extends StatelessWidget {
+  const _RecordActionButtons({required this.onClear, required this.onBuild});
+
+  final VoidCallback onClear;
+  final VoidCallback onBuild;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: Color(0x1A000000), blurRadius: 12, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SizedBox(
+              width: 120,
+              child: OutlinedButton(
+                onPressed: onClear,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFE35D5B),
+                  side: const BorderSide(color: Color(0xFFE35D5B)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('清空记录', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 120,
+              child: ElevatedButton(
+                onPressed: onBuild,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2F7BEA),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('构造记录', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DateHeader extends StatelessWidget {
   const _DateHeader({required this.title});
 
@@ -330,87 +476,6 @@ class _RecordEntry {
   final Widget Function(BuildContext context) buildCard;
 }
 
-class _TimedOverviewChart extends StatelessWidget {
-  const _TimedOverviewChart({required this.records});
-
-  final List<TrainingRecord> records;
-
-  @override
-  Widget build(BuildContext context) {
-    if (records.isEmpty) {
-      return Container(
-        height: 140,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8E8E8)),
-        ),
-        alignment: Alignment.center,
-        child: const Text('暂无数据', style: TextStyle(fontSize: 12, color: Color(0xFF8E8E8E))),
-      );
-    }
-    final data = List<TrainingRecord>.from(records)
-      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
-    final values = data.map((record) => record.statistics.maxStrengthSession).toList();
-    return Container(
-      height: 140,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8E8E8)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return CustomPaint(
-            size: Size(constraints.maxWidth, constraints.maxHeight),
-            painter: _TimedOverviewPainter(values: values, lineColor: const Color(0xFF2F7BEA)),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TimedOverviewPainter extends CustomPainter {
-  const _TimedOverviewPainter({required this.values, required this.lineColor});
-
-  final List<double> values;
-  final Color lineColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) {
-      return;
-    }
-    final minValue = values.reduce((a, b) => a < b ? a : b);
-    final maxValue = values.reduce((a, b) => a > b ? a : b);
-    final range = (maxValue - minValue).abs();
-    final safeRange = range <= 0 ? 1.0 : range;
-    final path = Path();
-    for (int i = 0; i < values.length; i++) {
-      final x = size.width * (i / (values.length - 1));
-      final normalized = (values[i] - minValue) / safeRange;
-      final y = size.height * (1 - normalized);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
-      ..color = lineColor;
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TimedOverviewPainter oldDelegate) {
-    return oldDelegate.values != values || oldDelegate.lineColor != lineColor;
-  }
-}
-
 String _formatDateSection(DateTime date) {
   final today = DateUtils.dateOnly(DateTime.now());
   final isToday = _isSameDate(date, today);
@@ -426,6 +491,13 @@ String _formatDateSection(DateTime date) {
 
 bool _isSameDate(DateTime left, DateTime right) {
   return left.year == right.year && left.month == right.month && left.day == right.day;
+}
+
+String _formatShortDate(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
 }
 
 class _FilterPanel extends StatefulWidget {
@@ -450,7 +522,8 @@ class _FilterPanel extends StatefulWidget {
     Set<TimedSummaryMetric> timedSummary,
     Set<FreeSummaryMetric> freeSummary,
     TimedBarMetric timedBarMetric,
-  ) onChanged;
+  )
+  onChanged;
 
   @override
   State<_FilterPanel> createState() => _FilterPanelState();
@@ -482,11 +555,7 @@ class _FilterPanelState extends State<_FilterPanel> {
               const Expanded(
                 child: Text('筛选条件', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-                tooltip: '关闭',
-              ),
+              IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close), tooltip: '关闭'),
             ],
           ),
         ),
@@ -512,7 +581,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                   },
                 ),
               const SizedBox(height: 16),
-              const _FilterSectionTitle(title: '指标摘要'),
+              const _FilterSectionTitle(title: '指标类型'),
               const SizedBox(height: 8),
               const _FilterSubTitle(title: '计时训练'),
               const SizedBox(height: 4),
@@ -561,10 +630,7 @@ class _FilterPanelState extends State<_FilterPanel> {
                 child: Column(
                   children: <Widget>[
                     for (final metric in TimedBarMetric.values)
-                      _FilterRadioRow<TimedBarMetric>(
-                        label: timedBarMetricLabel(metric),
-                        value: metric,
-                      ),
+                      _FilterRadioRow<TimedBarMetric>(label: timedBarMetricLabel(metric), value: metric),
                   ],
                 ),
               ),
@@ -599,14 +665,10 @@ class _FilterPanelState extends State<_FilterPanel> {
         ..add(RecordTrainingType.timed);
       _timedSummary
         ..clear()
-        ..addAll(
-          widget.timedDefinitions.map((definition) => definition.metric).where(defaultTimed.contains),
-        );
+        ..addAll(widget.timedDefinitions.map((definition) => definition.metric).where(defaultTimed.contains));
       _freeSummary
         ..clear()
-        ..addAll(
-          widget.freeDefinitions.map((definition) => definition.metric).where(defaultFree.contains),
-        );
+        ..addAll(widget.freeDefinitions.map((definition) => definition.metric).where(defaultFree.contains));
       _timedBarMetric = TimedBarMetric.averageStrength;
     });
   }
@@ -639,7 +701,10 @@ class _FilterSubTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF8E8E8E)));
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF8E8E8E)),
+    );
   }
 }
 
@@ -665,10 +730,7 @@ class _FilterCheckboxRow extends StatelessWidget {
 }
 
 class _FilterRadioRow<T> extends StatelessWidget {
-  const _FilterRadioRow({
-    required this.label,
-    required this.value,
-  });
+  const _FilterRadioRow({required this.label, required this.value});
 
   final String label;
   final T value;

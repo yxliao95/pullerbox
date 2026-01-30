@@ -56,6 +56,11 @@ class FreeTrainingRecordController extends Notifier<FreeTrainingRecordState> {
     );
     unawaited(_persistHistory());
   }
+
+  void clearAllRecords() {
+    state = state.copyWith(records: const <FreeTrainingRecord>[]);
+    unawaited(_persistHistory());
+  }
 }
 
 final freeTrainingRecordProvider =

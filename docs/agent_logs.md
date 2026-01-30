@@ -338,3 +338,17 @@
 - 修改点：记录卡片统计指标列宽不再使用 96 上限，改为按可用宽度等分；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
 - 修改点：记录卡片统计指标文字居中，列宽改为自适应子元素宽度并均匀分布；更新 `lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（调整）
 - 修改点：记录列表卡片支持长按删除，确认后调用对应 provider 移除记录；更新 `lib/src/views/record/history_page.dart`、`lib/src/views/record/widgets/record_card.dart`、`lib/src/views/record/widgets/free_training_record_card.dart`。（功能）
+- 修改点：记录页“数据总览”由折线图改为文本摘要，展示所选计时训练指标的区间最大/最小/最近一次值与对应时间；新增数据总览筛选面板支持起止日期与指标类型（计时训练）选择，并在标题右侧增加筛选按钮；更新 `lib/src/views/record/history_page.dart`。（调整）
+- 修改点：记录页移除“数据总览”展示与相关筛选逻辑，改为入口按钮“可视化数据统计”并跳转至新页面；新增占位页 `lib/src/views/record/overview_page.dart`；更新 `lib/src/views/record/history_page.dart`。（调整）
+- 修改点：训练记录 provider 在无历史记录时注入 2026 年 1 月的计划训练模拟数据（随机挑选 10 天，每天 2 条“左手 10mm/右手 10mm”，work/rest/cycles=10/3/20），并持久化保存；新增模拟数据构造器支持采样频率/噪声/最大力/模式等配置；更新 `lib/src/providers/training_record_provider.dart`，新增 `lib/src/services/training_record_seed_builder.dart`。（调整）
+- 修改点：补充训练记录 provider 对随机源的导入，修复 SeededRandomSource 未定义报错；更新 `lib/src/providers/training_record_provider.dart`。（修复）
+- 修改点：训练记录加载逻辑在已有历史记录时也合并注入模拟数据，避免因本地已有数据导致模拟记录不可见；新增合并去重辅助方法并按时间排序；更新 `lib/src/providers/training_record_provider.dart`。（修复）
+- 修改点：模拟训练记录改为复用蓝牙拉力模拟算法生成采样（启动/稳定/不稳定/疲劳下降），并为每条记录派生不同随机种子以拉开差异；更新 `lib/src/services/training_record_seed_builder.dart`。（调整）
+- 修改点：记录页右下角新增固定按钮组“清空记录/构造记录”，支持清空全部训练记录并按日期构造两条计划训练记录；新增日期确认弹窗；更新 `lib/src/views/record/history_page.dart`。（功能）
+- 修改点：训练记录 provider 新增清空全部记录与按日期构造记录接口，并调整仅在首次无历史时注入种子数据；更新 `lib/src/providers/training_record_provider.dart`。（功能）
+- 修改点：自由训练记录 provider 新增清空全部记录接口；更新 `lib/src/providers/free_training_record_provider.dart`。（功能）
+- 修改点：模拟数据构造器新增按日期生成计划训练记录能力；更新 `lib/src/services/training_record_seed_builder.dart`。（功能）
+- 修改点：记录页构造记录流程增加 mounted 检查以消除异步 context 警告，并将半透明背景颜色改用 withValues；更新 `lib/src/views/record/history_page.dart`。（修复）
+- 修改点：移除模拟记录构造器中未使用的私有方法以消除 unused 警告；更新 `lib/src/services/training_record_seed_builder.dart`。（修复）
+- 修改点：构造记录确认弹窗改用通用确认对话框，按钮文案为“取消/确认”；更新 `lib/src/views/record/history_page.dart`。（修复）
+- 修改点：同一天构造的一对模拟记录按日期与计划索引混合随机种子，确保两条记录采样数据不同；更新 `lib/src/services/training_record_seed_builder.dart`。（修复）
