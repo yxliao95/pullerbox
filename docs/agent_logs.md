@@ -387,3 +387,16 @@
 - 修改点：移除模拟记录构造器中未使用的私有方法以消除 unused 警告；更新 `lib/src/services/training_record_seed_builder.dart`。（修复）
 - 修改点：构造记录确认弹窗改用通用确认对话框，按钮文案为“取消/确认”；更新 `lib/src/views/record/history_page.dart`。（修复）
 - 修改点：同一天构造的一对模拟记录按日期与计划索引混合随机种子，确保两条记录采样数据不同；更新 `lib/src/services/training_record_seed_builder.dart`。（修复）
+- 修改点：训练比较页Y轴下限改为在满足20%留白约束下取最大值，并对上下限应用步进对齐；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页日期选择改为自定义紧凑日历弹窗，移除输入框并对有记录日期加粗；更新 `lib/src/providers/training_compare_provider.dart`、`lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页记录日期高亮改为使用本地日期（toLocal）计算，避免时区差异导致加粗失效；更新 `lib/src/providers/training_compare_provider.dart`。（修复）
+- 修改点：训练比较页日期弹窗有记录日期的加粗权重提升以更醒目；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页日期弹窗日历单元格点击区域加大以便触控；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页时间范围与指标区域改为表单式紧凑样式，统一边框与内边距；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页时间范围与指标区域改为单行表单布局；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页合并时间范围与指标为单一卡片，抽取公共选择控件；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页筛选卡片新增“可视化参数”标题与“更新”按钮，改为仅在点击更新时应用时间范围与指标；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页“可视化参数”标题移到卡片外，并将时间范围/指标改为标题+控件的双行布局；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页筛选卡片新增“重置”按钮并恢复初始筛选状态；更新 `lib/src/views/record/training_compare_page.dart`、`lib/src/providers/training_compare_provider.dart`。（调整）
+- 修改点：训练比较页筛选卡片“更新/重置”按钮由全宽改为右侧对齐；更新 `lib/src/views/record/training_compare_page.dart`。（调整）
+- 修改点：训练比较页筛选卡片按钮改为同一行右对齐展示，顺序为“重置/更新”；更新 `lib/src/views/record/training_compare_page.dart`。（调整）

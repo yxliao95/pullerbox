@@ -16,7 +16,6 @@ class TrainingComparePage extends ConsumerWidget {
     final metricDefinitions = timedSummaryMetricDefinitions
         .where((definition) => definition.metric != TimedSummaryMetric.fatigueSignal)
         .toList();
-    final metricLabel = timedSummaryMetricDefinitionMap[filter.metric]?.label ?? '指标';
     final sharedScaleRange = _resolveScaleRangeFromValues(<double?>[
       result.left.maxValue,
       result.left.minValue,
@@ -65,100 +64,23 @@ class TrainingComparePage extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 16),
-        _DateRangeCard(
+        const Text('可视化参数', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        _FilterPanel(
           startDate: filter.startDate,
           endDate: filter.endDate,
-          onStartTap: () => _pickStartDate(context, ref),
-          onEndTap: () => _pickEndDate(context, ref),
-        ),
-        const SizedBox(height: 16),
-        _MetricSwitchButton(
-          label: metricLabel,
-          onTap: () => _showMetricPicker(
-            context,
-            current: filter.metric,
-            definitions: metricDefinitions,
-            onSelected: (metric) => ref.read(trainingCompareFilterProvider.notifier).setMetric(metric),
-          ),
+          metric: filter.metric,
+          definitions: metricDefinitions,
+          recordDates: result.recordDates,
+          onApply: (startDate, endDate, metric) {
+            final notifier = ref.read(trainingCompareFilterProvider.notifier);
+            notifier.setStartDate(startDate);
+            notifier.setEndDate(endDate);
+            notifier.setMetric(metric);
+          },
+          onReset: () => ref.read(trainingCompareFilterProvider.notifier).resetAll(),
         ),
       ],
-    );
-  }
-
-  Future<void> _pickStartDate(BuildContext context, WidgetRef ref) async {
-    final filter = ref.read(trainingCompareFilterProvider);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: filter.startDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null || !context.mounted) {
-      return;
-    }
-    ref.read(trainingCompareFilterProvider.notifier).setStartDate(picked);
-  }
-
-  Future<void> _pickEndDate(BuildContext context, WidgetRef ref) async {
-    final filter = ref.read(trainingCompareFilterProvider);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: filter.endDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null || !context.mounted) {
-      return;
-    }
-    ref.read(trainingCompareFilterProvider.notifier).setEndDate(picked);
-  }
-}
-
-class _DateRangeCard extends StatelessWidget {
-  const _DateRangeCard({
-    required this.startDate,
-    required this.endDate,
-    required this.onStartTap,
-    required this.onEndTap,
-  });
-
-  final DateTime startDate;
-  final DateTime endDate;
-  final VoidCallback onStartTap;
-  final VoidCallback onEndTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x14000000), blurRadius: 10, offset: Offset(0, 4))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text('时间范围', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _DateButton(label: _formatDate(startDate), onTap: onStartTap),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('至', style: TextStyle(fontSize: 13, color: Color(0xFF8E8E8E))),
-                ),
-                Expanded(
-                  child: _DateButton(label: _formatDate(endDate), onTap: onEndTap),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -174,10 +96,10 @@ class _DateButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF2F7BEA),
-        side: const BorderSide(color: Color(0xFF2F7BEA)),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        foregroundColor: const Color(0xFF111827),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
     );
@@ -485,55 +407,222 @@ List<_DotPosition> _buildIntermediateDotPositions({
   return positions;
 }
 
-class _MetricSwitchButton extends StatelessWidget {
-  const _MetricSwitchButton({required this.label, required this.onTap});
+class _FilterPanel extends StatefulWidget {
+  const _FilterPanel({
+    required this.startDate,
+    required this.endDate,
+    required this.metric,
+    required this.definitions,
+    required this.recordDates,
+    required this.onApply,
+    required this.onReset,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+  final TimedSummaryMetric metric;
+  final List<MetricDefinition<TimedSummaryMetric>> definitions;
+  final Set<DateTime> recordDates;
+  final void Function(DateTime startDate, DateTime endDate, TimedSummaryMetric metric) onApply;
+  final VoidCallback onReset;
+
+  @override
+  State<_FilterPanel> createState() => _FilterPanelState();
+}
+
+class _FilterPanelState extends State<_FilterPanel> {
+  late DateTime _draftStartDate;
+  late DateTime _draftEndDate;
+  late TimedSummaryMetric _draftMetric;
+  bool _isDirty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftStartDate = widget.startDate;
+    _draftEndDate = widget.endDate;
+    _draftMetric = widget.metric;
+  }
+
+  @override
+  void didUpdateWidget(_FilterPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isDirty &&
+        (widget.startDate != _draftStartDate || widget.endDate != _draftEndDate || widget.metric != _draftMetric)) {
+      _draftStartDate = widget.startDate;
+      _draftEndDate = widget.endDate;
+      _draftMetric = widget.metric;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metricLabel = timedSummaryMetricDefinitionMap[_draftMetric]?.label ?? '指标';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('时间范围', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            const SizedBox(height: 2),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _DateButton(label: _formatDate(_draftStartDate), onTap: _pickDraftStartDate),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('至', style: TextStyle(fontSize: 12, color: Color(0xFF8E8E8E))),
+                ),
+                Expanded(
+                  child: _DateButton(label: _formatDate(_draftEndDate), onTap: _pickDraftEndDate),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text('指标', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            const SizedBox(height: 2),
+            _MetricSelector(label: metricLabel, onTap: _pickDraftMetric),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                OutlinedButton(
+                  onPressed: _resetToDefaults,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    side: const BorderSide(color: Color(0xFFE5E7EB)),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('重置', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _applyChanges,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2F7BEA),
+                    side: const BorderSide(color: Color(0xFF2F7BEA)),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('更新', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDraftStartDate() async {
+    final picked = await _showCompactDatePicker(
+      context,
+      initialDate: _draftStartDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      highlightedDates: widget.recordDates,
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _draftStartDate = picked;
+      if (_draftEndDate.isBefore(_draftStartDate)) {
+        _draftEndDate = _draftStartDate;
+      }
+      _isDirty = true;
+    });
+  }
+
+  Future<void> _pickDraftEndDate() async {
+    final picked = await _showCompactDatePicker(
+      context,
+      initialDate: _draftEndDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      highlightedDates: widget.recordDates,
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _draftEndDate = picked;
+      if (_draftStartDate.isAfter(_draftEndDate)) {
+        _draftStartDate = _draftEndDate;
+      }
+      _isDirty = true;
+    });
+  }
+
+  Future<void> _pickDraftMetric() async {
+    await _showMetricPicker(
+      context,
+      current: _draftMetric,
+      definitions: widget.definitions,
+      onSelected: (metric) {
+        setState(() {
+          _draftMetric = metric;
+          _isDirty = true;
+        });
+      },
+    );
+  }
+
+  void _applyChanges() {
+    widget.onApply(_draftStartDate, _draftEndDate, _draftMetric);
+    setState(() {
+      _isDirty = false;
+    });
+  }
+
+  void _resetToDefaults() {
+    widget.onReset();
+    setState(() {
+      _draftStartDate = widget.startDate;
+      _draftEndDate = widget.endDate;
+      _draftMetric = widget.metric;
+      _isDirty = false;
+    });
+  }
+}
+
+class _MetricSelector extends StatelessWidget {
+  const _MetricSelector({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x14000000), blurRadius: 10, offset: Offset(0, 4))],
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF111827),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text('指标', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: onTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2F7BEA),
-                  side: const BorderSide(color: Color(0xFF2F7BEA)),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.arrow_drop_down, size: 18),
-                  ],
-                ),
-              ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF6B7280)),
+        ],
       ),
     );
   }
@@ -622,6 +711,192 @@ String _formatDate(DateTime date) {
   return '$year-$month-$day';
 }
 
+Future<DateTime?> _showCompactDatePicker(
+  BuildContext context, {
+  required DateTime initialDate,
+  required DateTime firstDate,
+  required DateTime lastDate,
+  required Set<DateTime> highlightedDates,
+}) {
+  return showDialog<DateTime>(
+    context: context,
+    builder: (context) {
+      return _CompactDatePickerDialog(
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        highlightedDates: highlightedDates,
+      );
+    },
+  );
+}
+
+class _CompactDatePickerDialog extends StatefulWidget {
+  const _CompactDatePickerDialog({
+    required this.initialDate,
+    required this.firstDate,
+    required this.lastDate,
+    required this.highlightedDates,
+  });
+
+  final DateTime initialDate;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final Set<DateTime> highlightedDates;
+
+  @override
+  State<_CompactDatePickerDialog> createState() => _CompactDatePickerDialogState();
+}
+
+class _CompactDatePickerDialogState extends State<_CompactDatePickerDialog> {
+  late DateTime _displayedMonth;
+  late DateTime _selectedDate;
+  late Set<int> _highlightedKeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = _dateOnly(widget.initialDate);
+    _displayedMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    _highlightedKeys = widget.highlightedDates.map(_dateKey).toSet();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monthLabel = '${_displayedMonth.year}年${_displayedMonth.month}月';
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                IconButton(
+                  onPressed: _canMoveMonth(-1) ? () => _shiftMonth(-1) : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Expanded(
+                  child: Text(
+                    monthLabel,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _canMoveMonth(1) ? () => _shiftMonth(1) : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            _buildWeekdayHeader(),
+            const SizedBox(height: 6),
+            _buildCalendarGrid(),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+                const SizedBox(width: 8),
+                TextButton(onPressed: () => Navigator.of(context).pop(_selectedDate), child: const Text('确定')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeekdayHeader() {
+    const labels = <String>['一', '二', '三', '四', '五', '六', '日'];
+    return Row(
+      children: labels
+          .map(
+            (label) => Expanded(
+              child: Center(
+                child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildCalendarGrid() {
+    final firstDay = DateTime(_displayedMonth.year, _displayedMonth.month, 1);
+    final daysInMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1, 0).day;
+    final startOffset = firstDay.weekday - 1;
+    const totalCells = 42;
+    return GridView.builder(
+      itemCount: totalCells,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisExtent: 36),
+      itemBuilder: (context, index) {
+        final day = index - startOffset + 1;
+        if (day < 1 || day > daysInMonth) {
+          return const SizedBox.shrink();
+        }
+        final date = DateTime(_displayedMonth.year, _displayedMonth.month, day);
+        final inRange =
+            !_dateOnly(date).isBefore(_dateOnly(widget.firstDate)) &&
+            !_dateOnly(date).isAfter(_dateOnly(widget.lastDate));
+        final isSelected = _isSameDay(date, _selectedDate);
+        final isHighlighted = _highlightedKeys.contains(_dateKey(date));
+        final textStyle = TextStyle(
+          fontSize: 12,
+          fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.normal,
+          color: inRange ? const Color(0xFF111827) : const Color(0xFF9CA3AF),
+        );
+        return GestureDetector(
+          onTap: inRange
+              ? () {
+                  setState(() {
+                    _selectedDate = _dateOnly(date);
+                  });
+                }
+              : null,
+          child: Center(
+            child: Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: isSelected
+                  ? BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF2F7BEA), width: 1.5),
+                    )
+                  : null,
+              child: Text(day.toString(), style: textStyle),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _canMoveMonth(int delta) {
+    final target = DateTime(_displayedMonth.year, _displayedMonth.month + delta, 1);
+    final minMonth = DateTime(widget.firstDate.year, widget.firstDate.month, 1);
+    final maxMonth = DateTime(widget.lastDate.year, widget.lastDate.month, 1);
+    return !target.isBefore(minMonth) && !target.isAfter(maxMonth);
+  }
+
+  void _shiftMonth(int delta) {
+    setState(() {
+      _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + delta, 1);
+    });
+  }
+}
+
+int _dateKey(DateTime date) => date.year * 10000 + date.month * 100 + date.day;
+
+DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
+
+bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
 _ScaleRange _resolveScaleRangeFromValues(List<double?> candidates) {
   final values = candidates.whereType<double>().where((value) => value.isFinite && value >= 0).toList();
   if (values.isEmpty) {
@@ -632,27 +907,28 @@ _ScaleRange _resolveScaleRangeFromValues(List<double?> candidates) {
   final minStep = _resolveScaleStep(resolvedMax);
   const desiredMinPos = 0.2;
   const desiredMaxPos = 0.8;
-  final lowerBound = resolvedMax / 0.8;
-  final upperBound = resolvedMin > 0 ? resolvedMin / 0.2 : double.infinity;
-  var scaleMax = lowerBound;
-  if (upperBound.isFinite && upperBound >= lowerBound) {
-    scaleMax = lowerBound;
-  }
+  final posSpan = desiredMaxPos - desiredMinPos;
+  final safeSpan = posSpan == 0 ? 1.0 : posSpan;
+  final targetRange = (resolvedMax - resolvedMin) / safeSpan;
+  var scaleMax = resolvedMax + (1 - desiredMaxPos) * targetRange;
+  scaleMax = math.max(minStep, (scaleMax / minStep).ceil() * minStep);
   var scaleMin = 0.0;
-  for (var index = 0; index < 2; index++) {
-    final maxConstraint = scaleMin + (resolvedMax - scaleMin) / (desiredMaxPos == 0 ? 1 : desiredMaxPos);
-    scaleMax = math.max(scaleMax, maxConstraint);
-    scaleMax = (scaleMax / minStep).ceil() * minStep;
-    scaleMax = math.max(minStep, scaleMax);
-    final range = scaleMax - scaleMin;
-    final minPos = range <= 0 ? 0.0 : (resolvedMin - scaleMin) / range;
-    if (minPos < desiredMinPos) {
-      final denominator = 1 - desiredMinPos;
-      scaleMin = denominator == 0 ? scaleMin : (resolvedMin - desiredMinPos * scaleMax) / denominator;
-      if (!scaleMin.isFinite) {
-        scaleMin = 0.0;
-      }
+  for (var index = 0; index < 10; index++) {
+    final minDenominator = 1 - desiredMinPos;
+    final maxDenominator = 1 - desiredMaxPos;
+    final lowerBoundMin = maxDenominator == 0 ? scaleMin : (resolvedMax - desiredMaxPos * scaleMax) / maxDenominator;
+    final upperBoundMin = minDenominator == 0 ? scaleMin : (resolvedMin - desiredMinPos * scaleMax) / minDenominator;
+    if (lowerBoundMin > upperBoundMin) {
+      scaleMax += minStep;
+      continue;
     }
+    final snappedUpper = (upperBoundMin / minStep).floor() * minStep;
+    if (snappedUpper < lowerBoundMin) {
+      scaleMax += minStep;
+      continue;
+    }
+    scaleMin = snappedUpper;
+    break;
   }
   return _ScaleRange(min: scaleMin, max: scaleMax);
 }

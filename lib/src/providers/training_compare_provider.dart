@@ -59,6 +59,17 @@ class TrainingCompareFilterController extends Notifier<TrainingCompareFilterStat
     state = state.copyWith(startDate: startDate, endDate: endDate);
   }
 
+  void resetAll() {
+    final now = ref.read(clockProvider).now();
+    final endDate = _dateOnly(now);
+    final startDate = _subtractMonths(endDate, 3);
+    state = TrainingCompareFilterState(
+      startDate: startDate,
+      endDate: endDate,
+      metric: TimedSummaryMetric.maxStrength,
+    );
+  }
+
   void setStartDate(DateTime date) {
     final startDate = _dateOnly(date);
     final endDate = state.endDate.isBefore(startDate) ? startDate : state.endDate;
@@ -118,6 +129,7 @@ class TrainingCompareResult {
     required this.globalMaxValue,
     required this.globalMinValue,
     required this.availablePlanNames,
+    required this.recordDates,
   });
 
   final TrainingCompareFilterState filter;
@@ -126,6 +138,7 @@ class TrainingCompareResult {
   final double globalMaxValue;
   final double globalMinValue;
   final List<String> availablePlanNames;
+  final Set<DateTime> recordDates;
 }
 
 final trainingCompareFilterProvider =
@@ -137,6 +150,7 @@ final trainingCompareResultProvider = Provider<TrainingCompareResult>((ref) {
   final filter = ref.watch(trainingCompareFilterProvider);
   final records = ref.watch(trainingRecordProvider).records;
   final availablePlanNames = records.map((record) => record.planName).toSet().toList()..sort();
+  final recordDates = records.map((record) => _dateOnly(record.startedAt.toLocal())).toSet();
   final left = _buildMetricStats(filter.leftPlanName, filter, records);
   final right = _buildMetricStats(filter.rightPlanName, filter, records);
   final globalMaxValue = math.max(left.maxValue ?? 0, right.maxValue ?? 0);
@@ -148,6 +162,7 @@ final trainingCompareResultProvider = Provider<TrainingCompareResult>((ref) {
     globalMaxValue: globalMaxValue,
     globalMinValue: globalMinValue,
     availablePlanNames: availablePlanNames,
+    recordDates: recordDates,
   );
 });
 
